@@ -23,7 +23,7 @@ object ElementContainer:
       case Some(figure) => figures.filterNot(_.equals(figure)) :+ merge(figure, figureToAdd)
       case _ => figures :+ figureToAdd
 
-  private def addSymbol(symbolToAdd: Symbol): Unit =
+  private def   addSymbol(symbolToAdd: Symbol): Unit =
     symbols = symbols :+ symbolToAdd
 
   def addLine(line: String, lineNum: Int): Unit =
