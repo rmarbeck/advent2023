@@ -5,19 +5,9 @@ import scala.math._
 
 @main def hello: Unit =
   println("Launching 4-12")
-  val bufferedSource = Source.fromFile("./src/main/resources/test1.txt")
-  val lines = bufferedSource.getLines().toSeq
-  val (scores1, scores2) = lines.map:
-      case s"Card ${number}: ${winnings} | ${ours}" => (scorePart1(winnings, ours), scorePart2(winnings, ours))
-    .unzip
-
-  println(s"1 : ${scores1.sum}")
-  val result2 = scores2
-    .zipWithIndex
-    .foldLeft(List.fill(lines.length)(1)): (acc, scoreAndIndex) =>
-      acc.zip(calculateToAddList(acc, scoreAndIndex)).map(_ + _)
-  println(s"2 : ${result2.sum}")
-  bufferedSource.close
+  val (score1, score2) = Solver.solve
+  println(s"1 : ${score1}")
+  println(s"2 : ${score2}")
   println("Done")
 
 def calculateToAddList(current: List[Int], scoreAndIndex: (Int, Int)): List[Int] =
@@ -44,3 +34,19 @@ end score
 
 def clean(toClean: String): String =
   toClean.trim.replaceAll(" +", " ").replace(" ", ",")
+
+object Solver:
+  def solve: (String, String) =
+    val bufferedSource = Source.fromFile("./src/main/resources/test1.txt")
+    val lines = bufferedSource.getLines().toSeq
+    val (scores1, scores2) = lines.map:
+      case s"Card ${number}: ${winnings} | ${ours}" => (scorePart1(winnings, ours), scorePart2(winnings, ours))
+    .unzip
+    val result1 = s"${scores1.sum}"
+    val scores2Final = scores2
+      .zipWithIndex
+      .foldLeft(List.fill(lines.length)(1)): (acc, scoreAndIndex) =>
+        acc.zip(calculateToAddList(acc, scoreAndIndex)).map(_ + _)
+    val result2 = s"${scores2Final.sum}"
+    bufferedSource.close
+    (s"${result1}", s"${result2}")
