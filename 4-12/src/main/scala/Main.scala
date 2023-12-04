@@ -5,9 +5,11 @@ import scala.math._
 
 @main def hello: Unit =
   println("Launching 4-12")
-  val (score1, score2) = Solver.solve
-  println(s"1 : ${score1}")
-  println(s"2 : ${score2}")
+  List[() => (String, String)]( () => Solver.solveTest, () => Solver.solve).foreach: f =>
+    val (score1, score2) = f.apply()
+    println(s"1 : ${score1}")
+    println(s"2 : ${score2}")
+    println(s"----------------")
   println("Done")
 
 def calculateToAddList(current: List[Int], scoreAndIndex: (Int, Int)): List[Int] =
@@ -36,8 +38,12 @@ def clean(toClean: String): String =
   toClean.trim.replaceAll(" +", " ").replace(" ", ",")
 
 object Solver:
+  def solveTest: (String, String) =
+    solver("test.txt")
   def solve: (String, String) =
-    val bufferedSource = Source.fromFile("./src/main/resources/test1.txt")
+    solver("data.txt")
+  private def solver(fileName: String): (String, String) =
+    val bufferedSource = Source.fromFile("./src/main/resources/"+fileName)
     val lines = bufferedSource.getLines().toSeq
     val (scores1, scores2) = lines.map:
       case s"Card ${number}: ${winnings} | ${ours}" => (scorePart1(winnings, ours), scorePart2(winnings, ours))
