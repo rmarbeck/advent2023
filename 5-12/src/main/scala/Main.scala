@@ -6,6 +6,7 @@ import java.time.Instant
 
 import scala.collection.parallel._
 import collection.parallel.CollectionConverters.seqIsParallelizable
+import collection.parallel.CollectionConverters.VectorIsParallelizable
 
 // Right :-/ result is
 
@@ -41,8 +42,8 @@ object Solver:
 
     val seeds: Seq[Long] = managedLines.head.drop(6).split(',').map(_.toLong).toSeq
     val computingStartTime = Instant.now()
-    val (result1, result2) = IdiomaticSolution.solve(seeds, filteringMaps)
-    //val (result1, result2) = DumbButFastSolution.solve(seeds, filteringMaps)
+    //val (result1, result2) = IdiomaticSolution.solve(seeds, filteringMaps)
+    val (result1, result2) = DumbButFastSolution.solve(seeds, filteringMaps)
     println(s"Computing time is ${Duration.between(startTime, Instant.now()).toMillis}ms")
     //val (result1, result2) = ("", "")
     (s"${result1}", s"${result2}")
@@ -63,7 +64,7 @@ object IdiomaticSolution:
         outerList.par.map {
           solveFromFilteringMaps(_, filters)
         }.min
-      }.min
+      }.minOption.getOrElse(Long.MaxValue)
       println(s"partialResult : $partialResult from $start to ${start+length}")
       partialResult
     }.min
@@ -106,10 +107,10 @@ object DumbButFastSolution:
       case value => resolve(value)
     .min
 
-    val seedsOdd = seeds.zipWithIndex.filter((value, index) => index % 2 == 1).map(_._1).toSeq
-    val seedsEven = seeds.zipWithIndex.filter((value, index) => index % 2 == 0).map(_._1).toSeq
-
-    val result2 = (seedsEven.zip(seedsOdd)).par.map { (start, length) =>
+    //equivalent to
+    // val (seedsEven, seedsOdd) = seeds.partition(_%2 == 0)
+    // seedsEven.zip(seedsOdd).par.map { (start, length) =>
+    val result2 = seeds.grouped(2).toSeq.par.map { case Seq(start, length) =>
       var i: Long = start
       var minimum: Long = Long.MaxValue
       while (i < start + length) {
@@ -119,6 +120,7 @@ object DumbButFastSolution:
       println(s"partialResult : $minimum from $start to ${start + length} in ${Duration.between(startTime, Instant.now()).toMillis}ms")
       minimum
     }.min
+
 
     (s"${result1}", s"${result2}")
 
