@@ -3,10 +3,10 @@
 class MySuite extends munit.FunSuite:
   test("main test on final data"):
     val (score1, score2) = Solver.solve
-    assertEquals(score1, "0")
-    assertEquals(score2, "0")
+    assertEquals(score1, "840336")
+    assertEquals(score2, "41382569")
 
   test("main test on initial data"):
-    val (score1, score2) = Solver.solveTest
-    assertEquals(score1, "0")
-    assertEquals(score2, "0")
+      val (score1, score2) = Solver.solveTest
+      assertEquals(score1, "288")
+      assertEquals(score2, "71503")
