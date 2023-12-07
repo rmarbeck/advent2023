@@ -141,16 +141,19 @@ object DumbButFastSolution:
 
 case class Range(start: Long, ending: Option[Long]):
   def matches(other: Range): (Option[Range], Option[Range], Option[Range]) =
-    val part1 = other match
-      case value if this.startsBeforeStrictly(value) => Some(this.copy(ending= Some(value.start-1)))
-      case _ => None
-    val part2 = other match
-      case value if this.overlaps(value) => Some(this.copy(value.start, ending = this.firstEnd(value)))
-      case _ => None
-    val part3 = other match
-      case value if this.endsAfterStrictly(value) => Some(this.copy(start = value.ending.get + 1))
-      case _ => None
-    (part1, part2, part3)
+    if (!this.overlaps(other))
+      (None, None, None)
+    else
+      val part1 = other match
+        case value if this.startsBeforeStrictly(value) => Some(this.copy(ending= Some(value.start-1)))
+        case _ => None
+      val part2 = other match
+        case value if this.overlaps(value) => Some(this.copy(value.start, ending = this.firstEnd(value)))
+        case _ => None
+      val part3 = other match
+        case value if this.endsAfterStrictly(value) => Some(this.copy(start = value.ending.get + 1))
+        case _ => None
+      (part1, part2, part3)
 
   def length: Option[Long] = ending.map(_-start)
 
@@ -210,7 +213,7 @@ case class SeedToLocation(range: Range, drift: Long):
       case List(a_undrifted, b_undrifted, c_undrifted) => (a_undrifted, b_undrifted, c_undrifted)
     }.match
       case (None, None, None) => this +: Nil
-      case (valueStart, value, valueEnd) => createWithoutNewDrift(valueStart) ++ createWithNewDrift(value, mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
+      case (valueStart, Some(value), valueEnd) => createWithoutNewDrift(valueStart) ++ createWithNewDrift(Some(value), mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
       case value => println(s"IN this case ${value}"); Nil
 
   def solve(value: Long): Option[Long] =
@@ -218,6 +221,8 @@ case class SeedToLocation(range: Range, drift: Long):
       Some(value + drift)
     else
       None
+
+  override def toString: String = s"(${range.start}, ${range.ending.getOrElse("oo")}) -> ${range.start+drift}, ${range.ending.map(_+drift).getOrElse("oo")})"
 
 object SeedToLocation:
   def default = SeedToLocation(Range(0, None), 0)
@@ -240,7 +245,11 @@ case class MultilevelSolvingMap(data: Seq[SolvingMaps]):
   def build: SeedToLocationHolder =
     data.foldLeft(SeedToLocationHolder.default) { (acc, newSolvingMap) =>
       //println(s"$acc adding $newSolvingMap")
-      acc.add(newSolvingMap)
+      val result = acc.add(newSolvingMap)
+      result.stl.foreach(println)
+      println("...............")
+      result
+
     }
   def solve(value: Long): Long =
     val gardener = build
