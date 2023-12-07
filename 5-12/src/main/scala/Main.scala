@@ -1,3 +1,5 @@
+import IdiomaticSolutionBrutForce.solveFromFilteringMaps
+
 import scala.io.Source
 import scala.math.*
 import java.time.Duration
@@ -65,7 +67,7 @@ object IdiomaticSolutionBrutForce:
           solveFromFilteringMaps(_, filters)
         }.min
       }.minOption.getOrElse(Long.MaxValue)
-      println(s"partialResult : $partialResult from $start to ${start+length}")
+      //println(s"partialResult : $partialResult from $start to ${start+length}")
       partialResult
     }.min
 
@@ -77,12 +79,19 @@ object IdiomaticSolution:
     val result1 = seeds.map:
       case value => {
         val result = solver.solve(value)
-        println(s"$result")
+        //println(s"$value => $result")
         result
       }
     .min
 
-    val result2 =""
+    val Seq(seedsEven, seedsOdd) = List(0, 1).map(modulo => seeds.zipWithIndex.filter((value, index) => index % 2 == modulo).map(_._1))
+
+    val result2 = (seedsEven.zip(seedsOdd)).map { (start, length) =>
+        val partialResult = solver.solve(Range(start, Some(start+length-1)))
+        //println(s" $start \t${start+length-1} => \t\t$partialResult")
+        partialResult
+      }.minOption.getOrElse(Long.MaxValue)
+
 
     (s"${result1}", s"${result2}")
 
@@ -141,19 +150,20 @@ object DumbButFastSolution:
 
 case class Range(start: Long, ending: Option[Long]):
   def matches(other: Range): (Option[Range], Option[Range], Option[Range]) =
-    if (!this.overlaps(other))
+    if (!this.overlaps(other)) {
       (None, None, None)
-    else
+    } else {
       val part1 = other match
         case value if this.startsBeforeStrictly(value) => Some(this.copy(ending= Some(value.start-1)))
         case _ => None
       val part2 = other match
-        case value if this.overlaps(value) => Some(this.copy(value.start, ending = this.firstEnd(value)))
+        case value if this.overlaps(value) => Some(this.copy(max(this.start,value.start), ending = this.firstEnd(value)))
         case _ => None
       val part3 = other match
         case value if this.endsAfterStrictly(value) => Some(this.copy(start = value.ending.get + 1))
         case _ => None
       (part1, part2, part3)
+    }
 
   def length: Option[Long] = ending.map(_-start)
 
@@ -193,7 +203,7 @@ object Range:
   def fromMapLine(mapLine: MapLine): Range =
     Range(mapLine.sourceStart, Some(mapLine.sourceEnd))
 
-case class SeedToLocation(range: Range, drift: Long):
+case class SeedToLocation(range: Range, drift: Long, level: Int):
   def rangeDrifted: Range =
     range.copy(start = range.start+drift, range.ending.map(_+drift))
   def rangeUndrifted(other: Range): Range =
@@ -202,60 +212,79 @@ case class SeedToLocation(range: Range, drift: Long):
     other match
       case None => None
       case Some(value) => Some(rangeUndrifted(value))
-  def compose(mapLine: MapLine): Seq[SeedToLocation] =
+  def compose(mapLine: MapLine, composingLevel: Int): Seq[SeedToLocation] =
     def createWithNewDrift(range: Option[Range], newDrift: Long): Seq[SeedToLocation] =
       range match
         case None => Nil
-        case Some(validRange) => Seq(this.copy(range = validRange, drift = this.drift + newDrift))
+        case Some(validRange) if newDrift != 0 => Seq(this.copy(range = validRange, drift = this.drift + newDrift, level = composingLevel+1))
+        case Some(validRange) => Seq(this.copy(range = validRange, drift = this.drift, level = composingLevel))
     def createWithoutNewDrift(range: Option[Range]): Seq[SeedToLocation] = createWithNewDrift(range, 0l)
 
-    this.rangeDrifted.matches(Range.fromMapLine(mapLine)).toList.map(rangeUndrifted(_)).match {
-      case List(a_undrifted, b_undrifted, c_undrifted) => (a_undrifted, b_undrifted, c_undrifted)
-    }.match
-      case (None, None, None) => this +: Nil
-      case (valueStart, Some(value), valueEnd) => createWithoutNewDrift(valueStart) ++ createWithNewDrift(Some(value), mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
-      case value => println(s"IN this case ${value}"); Nil
+    if (this.level > composingLevel) {
+      this +: Nil
+    } else {
+      this.rangeDrifted.matches(Range.fromMapLine(mapLine)).toList.map(rangeUndrifted(_)).match {
+        case List(a_undrifted, b_undrifted, c_undrifted) => (a_undrifted, b_undrifted, c_undrifted)
+        case _ => (None, None, None)
+      }.match
+        case (None, None, None) => this +: Nil
+        case (valueStart, Some(value), valueEnd) => {
+          createWithoutNewDrift(valueStart) ++ createWithNewDrift(Some(value), mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
+        }
+        case value => println(s"IN this case ${value}"); Nil
+    }
 
   def solve(value: Long): Option[Long] =
-    if (value >= range.start && range.ending.map(_<= value).getOrElse(true))
+    if (value >= range.start && range.ending.map(value <= _).getOrElse(true))
       Some(value + drift)
     else
       None
 
-  override def toString: String = s"(${range.start}, ${range.ending.getOrElse("oo")}) -> ${range.start+drift}, ${range.ending.map(_+drift).getOrElse("oo")})"
+  def solve(value: Range): Option[Long] =
+    if (value.overlaps(range))
+      //println(s"found ${value} => ${range.start + drift}")
+      Some(range.start + drift)
+    else
+      None
+
+  override def toString: String = s"(${range.start}, ${range.ending.getOrElse("oo")}) -> (${range.start+drift}, ${range.ending.map(_+drift).getOrElse("oo")}) [$level]"
 
 object SeedToLocation:
-  def default = SeedToLocation(Range(0, None), 0)
+  def default = SeedToLocation(Range(0, None), 0, 0)
 
-case class SeedToLocationHolder(stl: Seq[SeedToLocation]):
+case class SeedToLocationHolder(stl: Seq[SeedToLocation], level: Int):
   def add(newSolvingMap: SolvingMaps): SeedToLocationHolder =
+    //SeedToLocationHolder(stl.flatMap(eachPart => newSolvingMap.linesMapped.flatMap(eachPart.compose(_, level))), level + 1)
     SeedToLocationHolder(newSolvingMap.linesMapped.foldLeft(stl) {
       (acc, newValue) =>
         //println(s"===> adding $newValue");
-        val result = acc.flatMap(_.compose(newValue))
+        val result = acc.flatMap(_.compose(newValue, level))
         //println(s"===> added $newValue");
         //println(s"$result");
         result
-    })
+    }, level + 1)
 
 object SeedToLocationHolder:
-  def default = SeedToLocationHolder(Seq(SeedToLocation.default))
+  def default = SeedToLocationHolder(Seq(SeedToLocation.default), 0)
 
 case class MultilevelSolvingMap(data: Seq[SolvingMaps]):
+  val gardener = build
   def build: SeedToLocationHolder =
     data.foldLeft(SeedToLocationHolder.default) { (acc, newSolvingMap) =>
       //println(s"$acc adding $newSolvingMap")
       val result = acc.add(newSolvingMap)
-      result.stl.foreach(println)
-      println("...............")
+      //result.stl.foreach(println)
+      //println("...............")
       result
 
     }
   def solve(value: Long): Long =
-    val gardener = build
     gardener.stl.map(_.solve(value)).find(_.isDefined).headOption match
       case None => 0l
       case Some(value) => value.getOrElse(0l)
+
+  def solve(value: Range): Long =
+    gardener.stl.map(_.solve(value)).filter(_.isDefined).map(_.get).min
 
 case class SolvingMaps(name: String, lines: Seq[String]):
   def parseLines: Seq[MapLine] =
