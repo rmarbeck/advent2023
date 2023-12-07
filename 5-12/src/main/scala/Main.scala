@@ -44,12 +44,29 @@ object Solver:
 
     val seeds: Seq[Long] = managedLines.head.drop(6).split(',').map(_.toLong).toSeq
     val computingStartTime = Instant.now()
-    //val (result1, result2) = IdiomaticSolution.solve(seeds, filteringMaps)
-    val (result1, result2) = IdiomaticSolution.solve(seeds, filteringMaps)
+
+    val chooseSolver = 0 // 0 -> IdiomaticSolution, 1 -> DumbButFastSolution, 2 -> IdiomaticSolutionBrutForce
+
+    val (result1, result2) = Seq(IdiomaticSolution.solve, DumbButFastSolution.solve, IdiomaticSolutionBrutForce.solve)(chooseSolver).apply(seeds, filteringMaps)
+
     println(s"Computing time is ${Duration.between(startTime, Instant.now()).toMillis}ms")
-    //val (result1, result2) = ("", "")
     (s"${result1}", s"${result2}")
 
+
+object IdiomaticSolution:
+  def solve(seeds: Seq[Long] , filters: Seq[SolvingMaps]): (String, String) =
+    val solver = MultilevelSolvingMap(filters)
+    val result1 = seeds.map:
+      case value =>
+        val result = solver.solve(value)
+        result
+    .min
+
+    val result2 = seeds.grouped(2).toSeq.map { case Seq(start, length) =>
+      solver.solve(Range(start, Some(start + length - 1)))
+    }.minOption.getOrElse(Long.MaxValue)
+
+    (s"${result1}", s"${result2}")
 
 object IdiomaticSolutionBrutForce:
   def solveFromFilteringMaps(value: Long, filters: Seq[SolvingMaps]): Long =
@@ -67,31 +84,8 @@ object IdiomaticSolutionBrutForce:
           solveFromFilteringMaps(_, filters)
         }.min
       }.minOption.getOrElse(Long.MaxValue)
-      //println(s"partialResult : $partialResult from $start to ${start+length}")
       partialResult
     }.min
-
-    (s"${result1}", s"${result2}")
-
-object IdiomaticSolution:
-  def solve(seeds: Seq[Long] , filters: Seq[SolvingMaps]): (String, String) =
-    val solver = MultilevelSolvingMap(filters)
-    val result1 = seeds.map:
-      case value => {
-        val result = solver.solve(value)
-        //println(s"$value => $result")
-        result
-      }
-    .min
-
-    val Seq(seedsEven, seedsOdd) = List(0, 1).map(modulo => seeds.zipWithIndex.filter((value, index) => index % 2 == modulo).map(_._1))
-
-    val result2 = (seedsEven.zip(seedsOdd)).map { (start, length) =>
-        val partialResult = solver.solve(Range(start, Some(start+length-1)))
-        //println(s" $start \t${start+length-1} => \t\t$partialResult")
-        partialResult
-      }.minOption.getOrElse(Long.MaxValue)
-
 
     (s"${result1}", s"${result2}")
 
@@ -104,7 +98,6 @@ object DumbButFastSolution:
         initializedArray(indexOfFilter)(indexOfMapper)(1) = mapper.sourceStart
         initializedArray(indexOfFilter)(indexOfMapper)(2) = mapper.sourceLength
     initializedArray
-
 
   def solve(seeds: Seq[Long], filters: Seq[SolvingMaps]): (String, String) =
     val numberOfFilters = filters.length
@@ -165,17 +158,13 @@ case class Range(start: Long, ending: Option[Long]):
       (part1, part2, part3)
     }
 
-  def length: Option[Long] = ending.map(_-start)
-
-  def startsTogether(other: Range): Boolean =
-    start == other.start
-  def endsAfterStrictly(other: Range): Boolean =
+  private def endsAfterStrictly(other: Range): Boolean =
     ending match
       case None => other.ending.isDefined
       case Some(value) => other.ending.map(value > _).getOrElse(false)
-  def startsBeforeStrictly(other: Range): Boolean =
+  private def startsBeforeStrictly(other: Range): Boolean =
     start < other.start
-  def firstEnd(other: Range): Option[Long] =
+  private def firstEnd(other: Range): Option[Long] =
     (ending, other.ending) match
       case (None, None) => None
       case (Some(value), None) => Some(value)
@@ -183,20 +172,12 @@ case class Range(start: Long, ending: Option[Long]):
       case (Some(value), Some(valueOther)) => Some(min(value, valueOther))
   def overlaps(other: Range): Boolean =
     this.startsBefore(other) && this.endsAfterStartOf(other) || other.startsBefore(this) && other.endsAfterStartOf(this)
-  def endsAfter(other: Range): Boolean =
-    ending match
-      case None => true
-      case Some(value) => other.ending.map(value>=_).getOrElse(false)
-  def startsBefore(other: Range): Boolean =
+  private def startsBefore(other: Range): Boolean =
     start <= other.start
-  def endsAfterStartOf(other: Range): Boolean =
+  private def endsAfterStartOf(other: Range): Boolean =
     ending match
       case None => true
       case Some(value) => value >= other.start
-  def endsTogether(other: Range): Boolean =
-    ending match
-      case Some(value) => other.ending.contains(value)
-      case None => other.ending.isEmpty
 
 
 object Range:
@@ -204,11 +185,11 @@ object Range:
     Range(mapLine.sourceStart, Some(mapLine.sourceEnd))
 
 case class SeedToLocation(range: Range, drift: Long, level: Int):
-  def rangeDrifted: Range =
+  private def rangeDrifted: Range =
     range.copy(start = range.start+drift, range.ending.map(_+drift))
-  def rangeUndrifted(other: Range): Range =
+  private def rangeUndrifted(other: Range): Range =
     range.copy(start = other.start - this.drift, other.ending.map(_ - this.drift))
-  def rangeUndrifted(other: Option[Range]): Option[Range] =
+  private def rangeUndrifted(other: Option[Range]): Option[Range] =
     other match
       case None => None
       case Some(value) => Some(rangeUndrifted(value))
@@ -220,19 +201,18 @@ case class SeedToLocation(range: Range, drift: Long, level: Int):
         case Some(validRange) => Seq(this.copy(range = validRange, drift = this.drift, level = composingLevel))
     def createWithoutNewDrift(range: Option[Range]): Seq[SeedToLocation] = createWithNewDrift(range, 0l)
 
-    if (this.level > composingLevel) {
-      this +: Nil
-    } else {
-      this.rangeDrifted.matches(Range.fromMapLine(mapLine)).toList.map(rangeUndrifted(_)).match {
-        case List(a_undrifted, b_undrifted, c_undrifted) => (a_undrifted, b_undrifted, c_undrifted)
-        case _ => (None, None, None)
-      }.match
-        case (None, None, None) => this +: Nil
-        case (valueStart, Some(value), valueEnd) => {
-          createWithoutNewDrift(valueStart) ++ createWithNewDrift(Some(value), mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
-        }
-        case value => println(s"IN this case ${value}"); Nil
-    }
+    this.level > composingLevel match
+      case true => this +: Nil
+      case false =>
+        this.rangeDrifted.matches(Range.fromMapLine(mapLine)).toList.map(rangeUndrifted(_)).match {
+          case List(a_undrifted, b_undrifted, c_undrifted) => (a_undrifted, b_undrifted, c_undrifted)
+          case unexpectedValue => println(s"SHOULD NEVER HAPPEN ${unexpectedValue}"); (None, None, None)
+        }.match
+          case (None, None, None) => this +: Nil
+          case (valueStart, Some(value), valueEnd) => {
+            createWithoutNewDrift(valueStart) ++ createWithNewDrift(Some(value), mapLine.drift) ++ createWithoutNewDrift(valueEnd) ++ Nil
+          }
+          case value => println(s"SHOULD NEVER HAPPEN ${value}"); Nil
 
   def solve(value: Long): Option[Long] =
     if (value >= range.start && range.ending.map(value <= _).getOrElse(true))
@@ -242,7 +222,6 @@ case class SeedToLocation(range: Range, drift: Long, level: Int):
 
   def solve(value: Range): Option[Long] =
     if (value.overlaps(range))
-      //println(s"found ${value} => ${range.start + drift}")
       Some(range.start + drift)
     else
       None
@@ -254,13 +233,9 @@ object SeedToLocation:
 
 case class SeedToLocationHolder(stl: Seq[SeedToLocation], level: Int):
   def add(newSolvingMap: SolvingMaps): SeedToLocationHolder =
-    //SeedToLocationHolder(stl.flatMap(eachPart => newSolvingMap.linesMapped.flatMap(eachPart.compose(_, level))), level + 1)
     SeedToLocationHolder(newSolvingMap.linesMapped.foldLeft(stl) {
       (acc, newValue) =>
-        //println(s"===> adding $newValue");
         val result = acc.flatMap(_.compose(newValue, level))
-        //println(s"===> added $newValue");
-        //println(s"$result");
         result
     }, level + 1)
 
@@ -271,12 +246,8 @@ case class MultilevelSolvingMap(data: Seq[SolvingMaps]):
   val gardener = build
   def build: SeedToLocationHolder =
     data.foldLeft(SeedToLocationHolder.default) { (acc, newSolvingMap) =>
-      //println(s"$acc adding $newSolvingMap")
       val result = acc.add(newSolvingMap)
-      //result.stl.foreach(println)
-      //println("...............")
       result
-
     }
   def solve(value: Long): Long =
     gardener.stl.map(_.solve(value)).find(_.isDefined).headOption match
@@ -296,38 +267,15 @@ case class SolvingMaps(name: String, lines: Seq[String]):
   def length = linesMapped.length
   def solve(value: Long): Long =
     val result = linesMapped.map(_.solve(value)).find(_.isDefined).map(_.get).getOrElse(value)
-    //println(s"")
     result
 
 case class MapLine(destination: Long, sourceStart: Long, sourceLength: Long):
   def drift: Long = destination - sourceStart
   def sourceEnd: Long = sourceStart + sourceLength - 1
-  def sourceStartProjected: Long = sourceStart + destination
-  def sourceEndProjected: Long = sourceEnd +destination
-  def mergeWithSameStartAndEnd(other: MapLine): MapLine =
-    this.copy(destination = this.destination + other.drift)
-  def containsProjected(other: MapLine): Boolean =
-    other.sourceStart >= this.sourceStartProjected && other.sourceEnd <= this.sourceEndProjected
-  def startsBeforeProjected(other: MapLine): Boolean =
-    other.sourceStart >= this.sourceStartProjected
-  def endsBeforeProjected(other: MapLine): Boolean =
-    other.sourceEnd <= this.sourceEndProjected
-  def cutAtStart(other: MapLine) =
-    this.copy(sourceLength = other.sourceStart-sourceStartProjected)
-  def fromStart(other: MapLine) =
-    driftOf(other.sourceStart - sourceStartProjected)
-  def driftOf(value: Long) =
-    MapLine(destination+value, sourceStart+value, sourceLength-value)
-  def cutFromEnd(other: MapLine) =
-      val newStart = other.sourceEnd + 1
-      val distanceBetweenStarts = newStart - this.sourceStart
-      val newLength = this.sourceLength - distanceBetweenStarts
-      val newDestination = destination-sourceStart+distanceBetweenStarts
-      MapLine(sourceStart = newStart, sourceLength = newLength, destination = newDestination)
+
   def solve(value: Long): Option[Long] =
     val result = value-sourceStart  match
       case toTest if toTest >= 0 && toTest < sourceLength => Some(destination + toTest)
       case _ => None
-    //print(s"${result.getOrElse(value)}-")
     result
 
