@@ -23,14 +23,23 @@ object Solver:
     val hands = lines.map(HandBidded.fromLine(_))
 
     //println(s"count is ${hands.sorted.reverse.zipWithIndex.map((value, index) => ((index+1) * value.bid).toLong)}")
-    hands.sorted.reverse.foreach(println)
+    //hands.sorted.reverse.foreach(println)
+    //hands.sortBy(_.handAsStringWithJoker).reverse.foreach(println)
     //println(hands.sorted.zip(hands.sortBy(_.handAsString)).map((first, second) => first == second).filter(_ == false))
     //val result1, result2 = hands.sorted.reverse.zipWithIndex.map((value, index) => ((index+1) * value.bid).toLong).sum
-    val result1, result2 = hands.sorted.reverse.zipWithIndex.foldLeft(0l) {(acc, value) =>
-      val result = acc + ((value._2+1) * value._1.bid)
+
+    val part1Sorting = hands.sorted.reverse
+    val part2Sorting = hands.sortBy(_.handAsStringWithJoker).reverse
+
+    val (result1, result2) = List(part1Sorting, part2Sorting).map(_.zipWithIndex.foldLeft(0l) { (acc, value) =>
+      val result = acc + ((value._2 + 1) * value._1.bid)
       //println(s"$value \t<= ${value} * index = ${result}")
       result
-    }
+    }) match
+      case List(first, second) => (first, second)
+      case _ => ("", "")
+
+
 
     (s"${result1}", s"${result2}")
 
@@ -65,6 +74,26 @@ case class HandBidded(hand: String, bid: Int) extends Ordered[HandBidded]:
       case _ if twoPairs => 4
       case _ if onePair => 5
       case _ => 6
+
+  def rankWithJoker: Int =
+  //println(s"===> ${hand.groupBy(value => value).toSeq.maxBy((key, value) => value.length)}")
+    hand.filterNot(_ == 'J') match
+      case handWithoutJoker if handWithoutJoker.length <= 1 => 0 // => becomes a fiveOfAKind
+      case handWithoutJoker if handWithoutJoker.length == 2 => 1 // => becomes a fourOfAKind
+      case handWithoutJoker if handWithoutJoker.length == 3 =>
+        maxNumberInSubHand(handWithoutJoker) match
+          case 3 => 0 // => becomes a fiveOfAKind
+          case 2 => 1 // => becomes a fourOfAKind
+          case _ => 3 // => becomes a fourOfAKind
+      case handWithoutJoker if handWithoutJoker.length == 4 =>
+        maxNumberInSubHand (handWithoutJoker) match
+          case 4 => 0 // => becomes a fiveOfAKind
+          case 3 => 1 // => becomes a fourOfAKind
+          case 2 => this.rank match
+            case 4 => 2 // => becomes a fullHouse
+            case _ => 3 // => becomes a threeOfAKind
+          case _ => 5 // => becomes a pair
+      case _ => this.rank
 
   def ofAKind(number: Int): Boolean =
     maxNumberInSubHand(hand) == number
@@ -129,17 +158,28 @@ case class HandBidded(hand: String, bid: Int) extends Ordered[HandBidded]:
   def handAsChars: String =
     hand.map(cardAsChar(_)).mkString
 
+  def handWithJokerAsChars: String =
+    hand.map(cardAsChar(_).replace("d", "z")).mkString
+
   def rankAsChar: String  =
     val alphabet = (0 to 25).map(_+'a').map(_.toChar).mkString
     alphabet.charAt(rank).toString
 
+  def rankWithJokerAsChar: String =
+    val alphabet = (0 to 25).map(_ + 'a').map(_.toChar).mkString
+    alphabet.charAt(rankWithJoker).toString
+
   def handAsString: String =
     s"${rankAsChar}${handAsChars}"
 
+  def handAsStringWithJoker: String =
+    s"${rankWithJokerAsChar}${handWithJokerAsChars}"
+
   override def toString: String =
-    s"$hand\t = ${handAsString}\t- bid is '$bid'\t- ranking is $rank <=> $rankExplained"
+    s"$hand\t = ${handAsString}\t${handAsStringWithJoker}\t- bid is '$bid'\t- ranking is $rank <=> $rankExplained"
 
 object HandBidded:
   def fromLine(line :String): HandBidded =
     val values = line.replaceAll(" ", ",").span(_ != ',')
     HandBidded(values._1.trim, values._2.tail.trim.toInt)
+
