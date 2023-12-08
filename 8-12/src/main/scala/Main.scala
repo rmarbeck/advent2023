@@ -5,7 +5,7 @@ import scala.math.*
 // Right :-/ result is
 
 @main def hello: Unit =
-  println("Launching 5-12")
+  println("Launching 8-12")
   List[() => (String, String)]( () => Solver.solveTest, () => Solver.solve).foreach: f =>
     val (score1, score2) = f.apply()
     println(s"1 : ${score1}")
@@ -21,17 +21,14 @@ object Solver:
   private def solver(fileName: String): (String, String) =
     val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
     val lines = bufferedSource.getLines().toSeq
-    val directions = lines.head.map {
-      _ match
+    val directions = lines.head.map:
         case 'L' => Left
         case 'R' => Right
-    }
-    val paths = lines.tail.filterNot(_.isEmpty).map(value => value.filter(_.isLetterOrDigit).mkString)
+
+    val paths = lines.tail.filterNot(_.isEmpty).map(Rule(_))
 
     val result1 = find("1", directions, paths)
     val result2 = find("2", directions, paths)
-
-
 
     (s"${result1}", s"${result2}")
 
@@ -40,8 +37,14 @@ sealed trait Direction
 object Left extends Direction
 object Right extends Direction
 
-def find(part: String, directions: Seq[Direction], paths: Seq[String]): Long =
+case class Rule(rawValues: String):
+  val valueManaged = rawValues.filter(_.isLetterOrDigit).mkString.grouped(3).toList
+  val (key, left, right) = (valueManaged(0), valueManaged(1), valueManaged(2))
+  def startsWith(start: String): Boolean =
+    key.startsWith(start)
 
+
+def find(part: String, directions: Seq[Direction], paths: Seq[Rule]): Long =
   def pgcd(first: Long, second: Long): Long =
     second match
       case 0 => first
@@ -54,6 +57,7 @@ def find(part: String, directions: Seq[Direction], paths: Seq[String]): Long =
 
   def ppcmRec(values : Seq[Long]): Long =
     values.length match
+      case 1 => values(0)
       case 2 => ppcm(values(0), values(1))
       case _ => ppcm(values.head, ppcmRec(values.tail))
 
@@ -61,10 +65,10 @@ def find(part: String, directions: Seq[Direction], paths: Seq[String]): Long =
   def findPart1(toFind: String, steps: Int): Int =
     val (result, newToFind) = toFind match {
         case "ZZZ" => (Some(steps), "")
-        case _ => paths.find(_.startsWith(toFind)).map { value =>
+        case _ => paths.find(_.startsWith(toFind)).map { rule =>
           directions(steps%directions.length) match
-            case Left => (None, value.drop(3).take(3))
-            case Right => (None, value.drop(6))
+            case Left => (None, rule.left)
+            case Right => (None, rule.right)
         }.getOrElse((None, ""))
       }
     result match
@@ -72,13 +76,13 @@ def find(part: String, directions: Seq[Direction], paths: Seq[String]): Long =
       case _ => findPart1(newToFind, steps+1)
 
   @tailrec
-  def findPart2(toFind: Seq[String], steps: Int): Int =
+  def findPart2(toFind: Seq[String], steps: Int): Long =
     def nextElementList: Seq[String] =
       toFind.map { toFindElement =>
-        paths.find(_.startsWith(toFindElement)).map { value =>
+        paths.find(_.startsWith(toFindElement)).map { rule =>
           directions(steps % directions.length) match
-            case Left => value.drop(3).take(3)
-            case Right => value.drop(6)
+            case Left => rule.left
+            case Right => rule.right
         }.getOrElse("")
       }
     end nextElementList
@@ -95,5 +99,5 @@ def find(part: String, directions: Seq[Direction], paths: Seq[String]): Long =
   part match
     case "1" => findPart1("AAA", 0)
     case "2" =>
-      ppcmRec((paths.map(_.take(3)).filter(_.drop(2) == "A").map(value => findPart2(value :: Nil, 0)).map(_/directions.length) :+ directions.length).map(_.toLong))
+      paths.filter(_.key.drop(2) == "A").map(rule => findPart2(rule.key :: Nil, 0)).foldLeft(1L)(ppcm)
     case _ => -1
