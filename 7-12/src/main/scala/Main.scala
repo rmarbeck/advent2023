@@ -23,8 +23,14 @@ object Solver:
     val hands = lines.map(HandBidded.fromLine(_))
 
     //println(s"count is ${hands.sorted.reverse.zipWithIndex.map((value, index) => ((index+1) * value.bid).toLong)}")
-    //hands.sorted.reverse.foreach(println)
-    val result1, result2 = hands.sorted.reverse.zipWithIndex.map((value, index) => ((index+1) * value.bid).toLong).sum
+    hands.sorted.reverse.foreach(println)
+    //println(hands.sorted.zip(hands.sortBy(_.handAsString)).map((first, second) => first == second).filter(_ == false))
+    //val result1, result2 = hands.sorted.reverse.zipWithIndex.map((value, index) => ((index+1) * value.bid).toLong).sum
+    val result1, result2 = hands.sorted.reverse.zipWithIndex.foldLeft(0l) {(acc, value) =>
+      val result = acc + ((value._2+1) * value._1.bid)
+      //println(s"$value \t<= ${value} * index = ${result}")
+      result
+    }
 
     (s"${result1}", s"${result2}")
 
@@ -58,7 +64,7 @@ case class HandBidded(hand: String, bid: Int) extends Ordered[HandBidded]:
       case _ if threeOfAkind => 3
       case _ if twoPairs => 4
       case _ if onePair => 5
-      case _ => 5 + valueOfHighest
+      case _ => 6
 
   def ofAKind(number: Int): Boolean =
     maxNumberInSubHand(hand) == number
@@ -109,8 +115,29 @@ case class HandBidded(hand: String, bid: Int) extends Ordered[HandBidded]:
       case 10 => s"	highest cars T"
       case value => s"	highest cars ${20 - value}"
 
+  def cardAsChar(card: Char): String =
+    val alphabetFromF = (0 to 20).map(_+'f').map(_.toChar).mkString
+    (card match
+      case 'A' => 'a'
+      case 'K' => 'b'
+      case 'Q' => 'c'
+      case 'J' => 'd'
+      case 'T' => 'e'
+      case intVal => alphabetFromF.charAt(9 - intVal.asDigit)
+      ).toString
+
+  def handAsChars: String =
+    hand.map(cardAsChar(_)).mkString
+
+  def rankAsChar: String  =
+    val alphabet = (0 to 25).map(_+'a').map(_.toChar).mkString
+    alphabet.charAt(rank).toString
+
+  def handAsString: String =
+    s"${rankAsChar}${handAsChars}"
+
   override def toString: String =
-    s"$hand\t- bid is $bid\t- ranking is $rank <=> $rankExplained"
+    s"$hand\t = ${handAsString}\t- bid is '$bid'\t- ranking is $rank <=> $rankExplained"
 
 object HandBidded:
   def fromLine(line :String): HandBidded =
