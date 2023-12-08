@@ -38,8 +38,8 @@ object Left extends Direction
 object Right extends Direction
 
 case class Rule(rawValues: String):
-  val valueManaged = rawValues.filter(_.isLetterOrDigit).mkString.grouped(3).toList
-  val (key, left, right) = (valueManaged(0), valueManaged(1), valueManaged(2))
+  val (key, left, right) = rawValues match
+    case s"$a = ($b, $c)" => (a, b, c)
   def startsWith(start: String): Boolean =
     key.startsWith(start)
 
