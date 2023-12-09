@@ -22,8 +22,8 @@ object Solver:
     val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
     val lines = bufferedSource.getLines().toSeq
     val directions = lines.head.map:
-        case 'L' => Left
-        case 'R' => Right
+        case 'L' => GoLeft
+        case 'R' => GoRight
 
     val paths = lines.tail.filterNot(_.isEmpty).map(Rule(_))
 
@@ -34,8 +34,8 @@ object Solver:
 
 sealed trait Direction
 
-object Left extends Direction
-object Right extends Direction
+object GoLeft extends Direction
+object GoRight extends Direction
 
 case class Rule(rawValues: String):
   val (key, left, right) = rawValues match
@@ -67,8 +67,8 @@ def find(part: String, directions: Seq[Direction], paths: Seq[Rule]): Long =
         case "ZZZ" => (Some(steps), "")
         case _ => paths.find(_.startsWith(toFind)).map { rule =>
           directions(steps%directions.length) match
-            case Left => (None, rule.left)
-            case Right => (None, rule.right)
+            case GoLeft => (None, rule.left)
+            case GoRight => (None, rule.right)
         }.getOrElse((None, ""))
       }
     result match
@@ -81,8 +81,8 @@ def find(part: String, directions: Seq[Direction], paths: Seq[Rule]): Long =
       toFind.map { toFindElement =>
         paths.find(_.startsWith(toFindElement)).map { rule =>
           directions(steps % directions.length) match
-            case Left => rule.left
-            case Right => rule.right
+            case GoLeft => rule.left
+            case GoRight => rule.right
         }.getOrElse("")
       }
     end nextElementList
