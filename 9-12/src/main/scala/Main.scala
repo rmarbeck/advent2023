@@ -35,7 +35,7 @@ object Solver:
     val lines = bufferedSource.getLines().toSeq
     val inputs: Seq[Seq[Int]] = lines.map(_.split(" ").toSeq.map(_.toInt))
 
-    val (part1, part2) = (inputs, inputs.map(_.reverse))
+    val (part1, part2) = (inputs.map(_.reverse), inputs)
 
     Seq(part1, part2).map {
       _.map(computeWithLazyList(_)).sum
@@ -52,12 +52,12 @@ def compute(inputList: Seq[Int], currentSum: Long): Long =
   loggerAOC.trace(s"$currentSum")
   inputList.filterNot(_==0).length match
     case 0 => currentSum
-    case _ => compute(inputList.sliding(2, 1).map((values) => values(1)-values(0)).toSeq, currentSum + inputList.takeRight(1).head.toLong)
+    case _ => compute(inputList.zip(inputList.tail).map(_-_), currentSum + inputList.head)
 
 def computeWithLazyList(inputList: Seq[Int]): Long =
   def diffOfElements(input: Seq[Int]): LazyList[Seq[Int]] = {
-    def computed = input.sliding(2, 1).map((values) => values(1)-values(0)).toSeq
+    def computed = input.zip(input.tail).map(_-_)
     if (input.filterNot( _ == 0 ).length == 0) LazyList.empty
     else LazyList.cons(input, diffOfElements(computed))
   }
-  diffOfElements(inputList).map(_.last).sum
+  diffOfElements(inputList).map(_.head).sum
