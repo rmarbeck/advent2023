@@ -1,6 +1,9 @@
 import com.typesafe.scalalogging.Logger
 import scala.io.Source
 import scala.math._
+import scala.util.matching.Regex
+import scala.collection.parallel._
+import collection.parallel.CollectionConverters.seqIsParallelizable
 
 import java.time.Duration
 import java.time.Instant
@@ -35,15 +38,20 @@ object Solver:
     val symbols = lines.map(_.span(_!=' ')._1)
     val targets = lines.map(_.span(_!=' ')._2.split(',').map(_.trim.toInt).toSeq)
 
-    val other = symbols.zip(targets).map { (symbol, target) =>
-      println(s"${symbol} -> ${target.toList} = ${splitAndResolve(symbol, target.toList)}")
-      splitAndResolve(symbol, target.toList)
+    val other = (symbols.zip(targets)).par.map { (symbol, target) =>
+      //println(s"${symbol} -> ${target.toList} = ${splitAndResolve(symbol, target.toList)}")
+      val optimized = simplifyLazyList(symbol, target.toList).lastOption.getOrElse((symbol, target.toList))
+      /*if (optimized._1 != symbol)
+        println(s"optimization ($symbol, ${target.toList}) => $optimized")
+      else
+        println(s"not optimized ($symbol, ${target.toList})")*/
+      brutForce(optimized._1, optimized._2)
     }.sum
 
-    val result = symbols.zip(targets).map { (symbol, target) =>
+    val result = ""/*symbols.zip(targets).map { (symbol, target) =>
       println(s"${symbol} -> ${target.toList} = ${brutForce(symbol, target.toList)}")
       brutForce(symbol, target.toList)
-    }.sum
+    }.sum*/
     /*symbols.foreach { line =>
       println(asGroups(line))
     }*/
@@ -124,3 +132,60 @@ def brutForce(current: String, target: Seq[Int]): Int =
         case value if value == target => 1
         case _ => 0
     case _ => brutForce(current.replaceFirst("\\?", "#"), target)+brutForce(current.replaceFirst("\\?", "."), target)
+
+def simplifyLazyList(input: String, target: Seq[Int]): LazyList[(String, Seq[Int])] =
+  val computed = simplifyInput(input, target)
+  if (checkEquality((computed._1, computed._2), (input, target))) LazyList.empty
+  else LazyList.cons((computed._1, computed._2), simplifyLazyList(computed._1, computed._2))
+
+def checkEquality(computed: (String, Seq[Int]), old: (String, Seq[Int])): Boolean =
+  //println(s"$computed vs $old => ${computed == old}")
+  computed == old
+
+def simplifyInput(input: String, target: Seq[Int]): (String, Seq[Int]) =
+  val endWithSharp: Regex = """^(.*)\.([#]+[\.]*)$""".r
+  val startWithSharp: Regex = """^([\.]*[#]+[\.]*)\.(.*)$""".r
+
+  input match
+    case value if value.startsWith(".") => (input.replaceFirst("[\\.]*", ""), target)
+    case value if endWithSharp.findFirstIn(input).isDefined =>
+      input match {
+        case endWithSharp(start, _) => (start+".", target.dropRight(1))
+      }
+    case value if startWithSharp.findFirstIn(input).isDefined =>
+      input match {
+        case startWithSharp(_, end) => ("."+end, target.drop(1))
+      }
+    case value if value.contains("?") => simplify2(input, target, 0)
+    case value if value.contains("?") => simplify3(input, target, 0)
+    case _ => (input, target)
+
+def simplify2(input: String, target: Seq[Int], start: Int): (String, Seq[Int]) =
+  def transformAtIndex(index: Int): String =
+    val (start, end) = input.splitAt(index)
+    start + "." + end.drop(1)
+  def replaceAtIndex(index: Int): String =
+    val (start, end) = input.splitAt(index)
+    (start + "#" + end.drop(1)).replace("?", ".")
+  def findAll: Seq[Int] =
+    input.zipWithIndex.filter(_._1 == '?').map(_._2)
+
+  findAll.find(currentIndex => isImpossible(replaceAtIndex(currentIndex), target)).map(index => (transformAtIndex(index), target)).getOrElse((input, target))
+
+def isImpossible(input: String, target: Seq[Int]): Boolean =
+  asGroups(input).maxOption.flatMap(outer => target.maxOption.map(outer > _)).getOrElse(false)
+
+def simplify3(input: String, target: Seq[Int], start: Int): (String, Seq[Int]) =
+  def transformAtIndex(index: Int): String =
+    val (start, end) = input.splitAt(index)
+    start + "#" + end.drop(1)
+  def replaceAtIndex(index: Int): String =
+    val (start, end) = input.splitAt(index)
+    (start + "." + end.drop(1)).replace("?", "#")
+  def findAll: Seq[Int] =
+    input.zipWithIndex.filter(_._1 == '?').map(_._2)
+
+  findAll.find(currentIndex => isImpossible2(replaceAtIndex(currentIndex), target)).map(index => (transformAtIndex(index), target)).getOrElse((input, target))
+
+def isImpossible2(input: String, target: Seq[Int]): Boolean =
+  asGroups(input).headOption.flatMap(outer => target.headOption.map(outer < _)).getOrElse(false)

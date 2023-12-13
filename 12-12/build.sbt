@@ -11,6 +11,7 @@ lazy val root = project
     libraryDependencies ++= Seq(
         "com.typesafe.scala-logging" %% "scala-logging" % "3.9.5",
         "ch.qos.logback" % "logback-classic" % "1.4.11",
+        "org.scala-lang.modules" %% "scala-parallel-collections" % "1.0.4",
         "org.scalameta" %% "munit" % "0.7.29" % Test
     )
   )
