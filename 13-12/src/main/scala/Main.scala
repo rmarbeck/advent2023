@@ -90,16 +90,14 @@ object Solver:
       val (line, col) = (lineList.headOption.getOrElse(0), colList.headOption.getOrElse(0))
 
       //println(s"sizeOf all ${currentBlock.all.length}")
-      val result = currentBlock.all.map(current => resolve(current.toList)).filterNot(_ == (0,0)).distinct
+      val result = currentBlock.all.map(current => resolve(current.toList))
       //println(s" toto $result vs ($line, $col) ${result.filterNot(_ == (line, col))}")
 
-      val (newLine, newCol) = result.filterNot(_ == (line, col)).headOption.getOrElse((line, col))
-      val finalLine = newLine match
-        case value if value == line  => 0
-        case _ => newLine
-      val finalCol = newCol match
-        case value if value == col => 0
-        case _ => newCol
+      val newLines = result.map(currentLists => currentLists._1).flatten.distinct.filterNot(_ == line)
+      val newCols = result.map(currentLists => currentLists._2).flatten.distinct.filterNot(_ == col)
+
+      val finalLine = newLines.headOption.getOrElse(0)
+      val finalCol = newCols.headOption.getOrElse(0)
       //println(s" toto $result vs ($line, $col) ${result.filterNot(_ == (line, col))} : => ($newLine, $newCol) => ($finalLine, $finalCol)")
       println(s" old ($line, $col)  => ($finalLine, $finalCol)")
       finalLine+finalCol*100
