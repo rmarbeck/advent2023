@@ -245,17 +245,16 @@ def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
         case value if value.length < 5 => None
         case first :: second :: _ :: _ :: last :: List() =>
           val sizeOfFirst = second - first
-          val sizeOfSecond = last - second
+          val sizeOfSecond = (last - second) / 3
           val firstList = tail.drop(first).take(second - first)
           val secondList = tail.drop(second).take(second - first)
           val lastList = tail.drop(last).take(second - first)
-          sizeOfSecond match
-            case sizeOfFirst =>
+          sizeOfSecond == sizeOfFirst match
+            case true =>
               firstList match
-                case valueOfFirstPart if valueOfFirstPart == secondList => valueOfFirstPart match
-                  case valueOfSecondLevel if valueOfSecondLevel == lastList => println(s"${firstList} ${secondList} ${lastList}") ;Some(second - first - 1)
-                  case _ => None
+                case valueOfFirstPart if valueOfFirstPart == lastList => Some(second - first - 1)
                 case _ => None
+            case false => None
         case _ => None
 
       cycle match
