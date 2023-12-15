@@ -163,20 +163,39 @@ object Solver:
 
     val asRows = lines.transpose.map(_.mkString)
 
+    /*println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 0).getValueOf(100)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 1).getValueOf(100)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 2).getValueOf(100)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 3).getValueOf(100)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 4).getValueOf(100)}")
+
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 0).getValueOf(101)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 1).getValueOf(101)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 2).getValueOf(101)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 3).getValueOf(101)}")
+    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 4).getValueOf(101)}")*/
+
+
     println("**************")
     //println(Support(lines, North).tiltAndTurnFull(3))
     //println(Support(lines, North).tiltAndTurnFull(1000).calc)
     //println(Support(lines, North).tiltAndTurnFull(2000).calc)
-    println(s" 1260 => ${Support(lines, North).tiltAndTurnFull(1260).calc}")
+    /*println(s" 1260 => ${Support(lines, North).tiltAndTurnFull(1260).calc}")
     println(s" 1250 => ${Support(lines, North).tiltAndTurnFull(1250).calc}")
     println(s" 1206 => ${Support(lines, North).tiltAndTurnFull(1206).calc}")
     val current = Support(lines, North).tiltAndTurnFull(1000)
-    var tempo = current
+    var tempo = current*/
     println("--------------1")
-    for i <- 0 to 100
+    /*for i <- 0 to 100
     do
       println(s"$i => ${tempo.calc}")
-      tempo = tempo.tiltAndTurnFull(1)
+      tempo = tempo.tiltAndTurnFull(1)*/
+    println {
+      lazyList(Support(lines, North)).last match
+        case None => "not found"
+        case Some(cycle) => cycle.getValueOf(286); cycle.getValueOf(319); cycle.getValueOf(1000000000)
+    }
+
 
     /*println(Support(lines, North).tiltAndTurnFull(1))
     println("--------------2")
@@ -190,7 +209,7 @@ object Solver:
     println(Support(lines, North).tilt(West).tilt(South).tilt(East).tilt(North))
     println("**************")*/
 
-    val result = asRows.map { currentLine =>
+    /*val result = asRows.map { currentLine =>
       val length = currentLine.length
       currentLine.zipWithIndex.foldLeft((0,length)) { (acc, newValue) =>
         newValue match
@@ -198,25 +217,66 @@ object Solver:
           case ('O', _) => (acc._1 + acc._2, acc._2 - 1)
           case ('#', currentIndex) => (acc._1, (length - (currentIndex+1) ))
       }._1
-    }.sum
+    }.sum*/
 
-    val (result1, result2) = (s"$result", "")
+    val (result1, result2) = (s"", "")
 
 
 
     (s"${result1}", s"${result2}")
 
+def lazyList(support: Support): LazyList[Option[Cycle[Long]]] =
+  loadLazyList(support, List())
 
-def loadLazyList(support: Support, previous: List[Long]): LazyList[Long] =
-  val computed = support.calc
+def loadLazyList(support: Support, previous: List[Long]): LazyList[Option[Cycle[Long]]] =
+  val tilted = support.tiltAndTurnFull(1)
+  val computed = tilted.calc
   val newList = previous :+ computed
-  if (isCyclic(newList)) LazyList.empty
-  else LazyList.cons(computed, loadLazyList(support.tiltAndTurnFull(1), newList))
+  val cycle = findCycle(previous)
+  if (cycle.isDefined) LazyList.empty
+  else LazyList.cons(findCycle(newList), loadLazyList(tilted, newList))
 
-def isCyclic(toAnalyse: List[Long]): Boolean =
-  val maps = toAnalyse.foldLeft(Map[Long, Int]()) { (acc, newValue) =>
-    acc.isDefinedAt(newValue) match
-      case true => acc + (newValue -> (1 + acc(newValue)))
-      case false => acc + (newValue -> 1)
-  }
-  false
+def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
+  toAnalyse.length match
+    case value if value < 1 => None
+    case _ =>
+      val head :: tail = toAnalyse.reverse
+      val cycle = tail.zipWithIndex.filter((value, index) => value == head).map((value, index) => index+1).take(5) match
+        case value if value.length < 5 => None
+        case first :: second :: _ :: _ :: last :: List() =>
+          val sizeOfFirst = second - first
+          val sizeOfSecond = last - second
+          val firstList = tail.drop(first).take(second - first)
+          val secondList = tail.drop(second).take(second - first)
+          val lastList = tail.drop(last).take(second - first)
+          sizeOfSecond match
+            case sizeOfFirst =>
+              firstList match
+                case valueOfFirstPart if valueOfFirstPart == secondList => valueOfFirstPart match
+                  case valueOfSecondLevel if valueOfSecondLevel == lastList => println(s"${firstList} ${secondList} ${lastList}") ;Some(second - first - 1)
+                  case _ => None
+                case _ => None
+        case _ => None
+
+      cycle match
+        case None => None
+        case Some(0) => None
+        case Some(value) =>
+          val firstIndexOfResultingList = (toAnalyse.length - value - 1) % value
+          //println(s"first index = $firstIndexOfResultingList, from ${(toAnalyse.length - value - 1)} and ${toAnalyse.length - 1} : ${toAnalyse((toAnalyse.length - value - 1))} and ${toAnalyse.last}")
+          println(s"cycle is ${value} with drift of ${(toAnalyse.length-value-1)%value}");
+          Some(Cycle(toAnalyse.takeRight(value), (firstIndexOfResultingList)))
+
+class Cycle[A](values: List[A], moduloOfFirstElement: Int):
+  val reArrangedList = moduloOfFirstElement match
+    case 0 => values
+    case value => values.takeRight(value) ::: values.dropRight(value)
+
+  def getValueOf(index: Int): A =
+    val calculatedIndex = index % values.length match
+      case value if value >= moduloOfFirstElement => moduloOfFirstElement + value
+      case value => (moduloOfFirstElement - value)
+
+    //println(s"$calculatedIndex, $index, ${values.length}, $moduloOfFirstElement, $values, $reArrangedList ")
+    //println(s"${index%values.length}, $index, ${values.length}, $moduloOfFirstElement, $values, $reArrangedList  ==> ${reArrangedList(index%values.length)} <==")
+    reArrangedList(index%values.length)
