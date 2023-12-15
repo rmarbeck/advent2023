@@ -15,7 +15,7 @@ val loggerAOCPart2 = Logger("aoc.part2")
 @main def hello: Unit =
   loggerAOC.trace("Root trace activated")
   loggerAOC.debug("Root debug activated")
-  println("Launching X-12")
+  println("Launching 14-12")
   val startTime = Instant.now()
 
   List[() => (String, String)]( () => Solver.solveTest, () => Solver.solve).foreach: f =>
@@ -85,7 +85,7 @@ class Support(input: Seq[String], val direction: Direction = North):
 
   def transpose(support: Support): Support =
     val newArray = support.content.map(_.clone())
-    Support(newArray.transpose.map(_.mkString), support.direction.nextDir)
+    Support(newArray.toIndexedSeq.transpose.map(_.mkString), support.direction.nextDir)
 
   def swap(direction: Direction): Support =
     val newArray = this.content.map(_.clone())
@@ -163,66 +163,19 @@ object Solver:
 
     val asRows = lines.transpose.map(_.mkString)
 
-    /*println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 0).getValueOf(100)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 1).getValueOf(100)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 2).getValueOf(100)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 3).getValueOf(100)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 4).getValueOf(100)}")
-
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 0).getValueOf(101)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 1).getValueOf(101)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 2).getValueOf(101)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 3).getValueOf(101)}")
-    println(s" => ${Cycle[Char](List('a', 'b', 'c', 'd', 'e'), 4).getValueOf(101)}")*/
-
-
-    println("**************")
-    //println(Support(lines, North).tiltAndTurnFull(3))
-    //println(Support(lines, North).tiltAndTurnFull(1000).calc)
-    //println(Support(lines, North).tiltAndTurnFull(2000).calc)
-    /*println(s" 1260 => ${Support(lines, North).tiltAndTurnFull(1260).calc}")
-    println(s" 1250 => ${Support(lines, North).tiltAndTurnFull(1250).calc}")
-    println(s" 1206 => ${Support(lines, North).tiltAndTurnFull(1206).calc}")*/
-    val current = Support(lines, North)
-    var tempo = current
-    println("--------------1")
-    /*for i <- 0 to 100
-    do
-      println(s"$i => ${tempo.calc}")
-      tempo = tempo.tiltAndTurnFull(1)*/
-
-    println {
-      lazyList(Support(lines, North)).last match
-        case None => "not found"
-        case Some(cycle) => cycle.getValueOf(1000000000)
-    }
-
-
-    /*println(Support(lines, North).tiltAndTurnFull(1))
-    println("--------------2")
-    println(Support(lines, North).tiltAndTurnFull(100))*/
-    /*println(Support(lines, North).tilt(West))
-    println("--------------2")
-    println(Support(lines, North).tilt(West).tilt(South))
-    println("--------------3")
-    println(Support(lines, North).tilt(West).tilt(South).tilt(East))
-    println("--------------4")
-    println(Support(lines, North).tilt(West).tilt(South).tilt(East).tilt(North))
-    println("**************")*/
-
-    /*val result = asRows.map { currentLine =>
+    val result1 = asRows.map { currentLine =>
       val length = currentLine.length
-      currentLine.zipWithIndex.foldLeft((0,length)) { (acc, newValue) =>
+      currentLine.zipWithIndex.foldLeft((0, length)) { (acc, newValue) =>
         newValue match
           case ('.', _) => acc
           case ('O', _) => (acc._1 + acc._2, acc._2 - 1)
-          case ('#', currentIndex) => (acc._1, (length - (currentIndex+1) ))
+          case ('#', currentIndex) => (acc._1, (length - (currentIndex + 1)))
       }._1
-    }.sum*/
+    }.sum
 
-    val (result1, result2) = (s"", "")
-
-
+    val result2 = lazyList(Support(lines, North)).last match
+        case None => "not found"
+        case Some(cycle) => cycle.getValueOf(1000000000)
 
     (s"${result1}", s"${result2}")
 
@@ -239,22 +192,16 @@ def loadLazyList(support: Support, previous: List[Long]): LazyList[Option[Cycle[
 
 def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
   toAnalyse.length match
-    case value if value < 10 => None
+    case value if value < 15 => None
     case _ =>
-      val head :: tail = toAnalyse.reverse
-      val cycle = tail.zipWithIndex.filter((value, index) => value == head).map((value, index) => index+1).take(5) match
-        case value if value.length < 5 => None
-        case first :: second :: _ :: _ :: last :: List() =>
-          val sizeOfFirst = second - first
-          val sizeOfSecond = (last - second) / 3
+      val head :: tail = toAnalyse.reverse: @unchecked
+      val cycle = tail.zipWithIndex.filter((value, index) => value == head).map((value, index) => index+1).take(2) match
+        case value if value.length < 2 => None
+        case first :: second :: List() =>
           val firstList = tail.drop(first).take(second - first)
           val secondList = tail.drop(second).take(second - first)
-          val lastList = tail.drop(last).take(second - first)
-          sizeOfSecond == sizeOfFirst match
-            case true =>
-              firstList match
-                case valueOfFirstPart if valueOfFirstPart == lastList => Some(second - first)
-                case _ => None
+          firstList == secondList match
+            case true => Some(second - first)
             case false => None
         case _ => None
 
