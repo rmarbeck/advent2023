@@ -131,14 +131,46 @@ def resolveMaze(maze: Array[Array[Char]]): Int =
       case None => None
       case Some(value: Seq[Direction]) => Some(output(value.filterNot(isForbidden(_)).head))
 
-  val partOfTheLoop = progressiveSnake(findStart, None).filterNot(value => value._2 == '-' || value._2 == '|').map(current => (current._1._1,current._1._2))
+  val partOfTheLoop = progressiveSnake(findStart, None).filterNot(value => value._2 == '-' || value._2 == '|').map :
+      case ((x, y), 'L') => ((x, y+1), 'L')
+      case ((x, y), 'J') => ((x+1, y+1), 'J')
+      case ((x, y), 'F') => ((x, y), 'F')
+      case ((x, y), '7') => ((x+1, y), '7')
+      case ((x, y), 'S') => ((x, y), 'S')
+
   val toZipWith = partOfTheLoop.tail :+ partOfTheLoop.head
 
   //partOfTheLoop.foreach(println)
 
-  val area = partOfTheLoop.zip(toZipWith).foldLeft(0)((acc, newValue) => acc + (newValue._2._1*newValue._1._2 - newValue._2._2*newValue._1._1))
+  val lengthOfQueue = progressiveSnake(findStart, None).length / 2
 
-  println(s" => ${area/2}")
+  val area = partOfTheLoop.zip(toZipWith).foldLeft(0) { (acc, newValue) =>
+    val (x1, y1, x2, y2) = (newValue._1._1._1, newValue._1._1._2, newValue._2._1._1, newValue._2._1._2)
+    val offsets = Seq((0,0), (0, 1), (1, 0), (1, 1))
+    val results = offsets.zip(offsets).map((offset1, offset2) => (x2+offset2._1) * (y1+x2+offset1._2) - ((x1+offset1._1) * (y2+offset2._2))).foldLeft((0,0))((acc, newValue) => (math.min(acc._1, newValue), math.max(acc._2, newValue)))
+    val (minAsAbs, maxAsAbs) = (math.abs(results._1), math.abs(results._2))
+    if (minAsAbs > maxAsAbs)
+      println(s"($x1,$y1) => ($x2,$y2) => ${results._1} = ${acc + results._1}")
+      acc + results._1
+    else
+      println(s"($x1,$y1) => ($x2,$y2) => ${results._2} = ${acc + results._2}")
+      acc +  (x1, y1, x2, y2)
+  }
+  
+  /*val area = partOfTheLoop.zip(toZipWith).foldLeft(0d) { (acc, newValue) =>
+    val (x1, y1, x2, y2) = (newValue._1._1._1, newValue._1._1._2, newValue._2._1._1, newValue._2._1._2)
+    val (letter1, letter2) = (newValue._1._2, newValue._2._2)
+    val (x1b, y1b, x2b, y2b) = (letter1, letter2) match
+      case ('F', 'J') => (x1, y1, x2-1, y2)
+      case ('7', 'L') => (x1+1, y1, x2, y2)
+      case _ => (x1, y1, x2, y2)
+
+    println(s"($x1b,$y1b) => ($x2b,$y2b) => ${x2b * y1b - x1b * y2b}")
+    acc + (x2b * y1b - x1b * y2b)
+  }*/
+
+
+  println(s" => ${area/2} and ${lengthOfQueue} => ${(area/2)-(lengthOfQueue)*2}")
 
   /*val candidateToSolutionPart2 = for j <- 0 until maze(0).length
                                      i <- 0 until maze.length
@@ -153,5 +185,5 @@ def resolveMaze(maze: Array[Array[Char]]): Int =
 
   //loggerAOCPart2.debug(s"${candidateToSolutionPart2.filterNot(_.isEmpty).length} possible")
 
-  progressiveSnake(findStart, None).length / 2
+  lengthOfQueue
 
