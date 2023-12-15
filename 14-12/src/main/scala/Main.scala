@@ -182,18 +182,19 @@ object Solver:
     //println(Support(lines, North).tiltAndTurnFull(2000).calc)
     /*println(s" 1260 => ${Support(lines, North).tiltAndTurnFull(1260).calc}")
     println(s" 1250 => ${Support(lines, North).tiltAndTurnFull(1250).calc}")
-    println(s" 1206 => ${Support(lines, North).tiltAndTurnFull(1206).calc}")
-    val current = Support(lines, North).tiltAndTurnFull(1000)
-    var tempo = current*/
+    println(s" 1206 => ${Support(lines, North).tiltAndTurnFull(1206).calc}")*/
+    val current = Support(lines, North)
+    var tempo = current
     println("--------------1")
     /*for i <- 0 to 100
     do
       println(s"$i => ${tempo.calc}")
       tempo = tempo.tiltAndTurnFull(1)*/
+
     println {
       lazyList(Support(lines, North)).last match
         case None => "not found"
-        case Some(cycle) => cycle.getValueOf(286); cycle.getValueOf(319); cycle.getValueOf(1000000000)
+        case Some(cycle) => cycle.getValueOf(1000000000)
     }
 
 
@@ -226,7 +227,7 @@ object Solver:
     (s"${result1}", s"${result2}")
 
 def lazyList(support: Support): LazyList[Option[Cycle[Long]]] =
-  loadLazyList(support, List())
+  loadLazyList(support, List(0l))
 
 def loadLazyList(support: Support, previous: List[Long]): LazyList[Option[Cycle[Long]]] =
   val tilted = support.tiltAndTurnFull(1)
@@ -238,7 +239,7 @@ def loadLazyList(support: Support, previous: List[Long]): LazyList[Option[Cycle[
 
 def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
   toAnalyse.length match
-    case value if value < 1 => None
+    case value if value < 10 => None
     case _ =>
       val head :: tail = toAnalyse.reverse
       val cycle = tail.zipWithIndex.filter((value, index) => value == head).map((value, index) => index+1).take(5) match
@@ -252,7 +253,7 @@ def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
           sizeOfSecond == sizeOfFirst match
             case true =>
               firstList match
-                case valueOfFirstPart if valueOfFirstPart == lastList => Some(second - first - 1)
+                case valueOfFirstPart if valueOfFirstPart == lastList => Some(second - first)
                 case _ => None
             case false => None
         case _ => None
@@ -261,9 +262,9 @@ def findCycle(toAnalyse: List[Long]): Option[Cycle[Long]] =
         case None => None
         case Some(0) => None
         case Some(value) =>
-          val firstIndexOfResultingList = (toAnalyse.length - value - 1) % value
+          val firstIndexOfResultingList = (toAnalyse.length - value) % value
           //println(s"first index = $firstIndexOfResultingList, from ${(toAnalyse.length - value - 1)} and ${toAnalyse.length - 1} : ${toAnalyse((toAnalyse.length - value - 1))} and ${toAnalyse.last}")
-          println(s"cycle is ${value} with drift of ${(toAnalyse.length-value-1)%value}");
+          //println(s"cycle is ${value} with drift of ${(toAnalyse.length-value)%value}");
           Some(Cycle(toAnalyse.takeRight(value), (firstIndexOfResultingList)))
 
 class Cycle[A](values: List[A], moduloOfFirstElement: Int):
