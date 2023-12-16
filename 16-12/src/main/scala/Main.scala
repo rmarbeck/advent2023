@@ -49,11 +49,29 @@ object Solver:
     val resultOf2 = (for row <- 0 until container1.heigh
         col <- 0 until container1.width
     yield
-      List(Beam(Left2Right()), Beam(Right2Left()), Beam(Up2Down()), Beam(Down2Up())).par.map { currentBeam =>
-      val container = Container(lines)
-        pathLazyList(List((currentBeam, container.from(Position(row, col, container.heigh, container.width)))), 0).lastOption
-        container.calc
-      }.max).max
+      def fromBeam(beam: List[Beam]): Int =
+        beam.map { currentBeam =>
+          val container = Container(lines)
+          pathLazyList(List((currentBeam, container.from(Position(row, col, container.heigh, container.width)))), 0).lastOption
+          container.calc
+        }.max
+      (row, col) match
+        case (0, value) =>
+          value match
+            case 0 => fromBeam(List(Beam(Up2Down()), Beam(Left2Right())))
+            case colValue if colValue == container1.width-1 => fromBeam(List(Beam(Up2Down()), Beam(Right2Left())))
+            case _ => fromBeam(List(Beam(Up2Down())))
+        case (valueRow, valueCol) if valueRow == container1.heigh-1 =>
+          valueCol match
+            case 0 => fromBeam(List(Beam(Down2Up()), Beam(Left2Right())))
+            case colValue if colValue == container1.width-1 => fromBeam(List(Beam(Down2Up()), Beam(Right2Left())))
+            case _ => fromBeam(List(Beam(Down2Up())))
+        case (_, 0) =>
+          fromBeam(List(Beam(Left2Right())))
+        case (_, value) if value == container1.width-1 =>
+          fromBeam(List(Beam(Right2Left())))
+        case _ => 0
+    ).max
 
 
     val beams = List(Beam(Left2Right()))
