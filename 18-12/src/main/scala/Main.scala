@@ -16,7 +16,7 @@ import Turn._
 @main def hello: Unit =
   loggerAOC.trace("Root trace activated")
   loggerAOC.debug("Root debug activated")
-  println("Launching X-12")
+  println("Launching 18-12")
   val startTime = Instant.now()
 
   List[() => (String, String)]( () => Solver.solveTest, () => Solver.solve).foreach: f =>
@@ -36,26 +36,22 @@ object Solver:
     val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
     val lines = bufferedSource.getLines().toSeq
 
+    val (dirs1, dirs2) = (lines.map:
+      case s"$dir $step ($color)" =>
+        val part1 = Directive.fromLetter(dir.toCharArray.head, step.toInt)
+        val part2 = Directive.fromLetter("RDLU"(color.last.asDigit), hexToLong(color.drop(1).dropRight(1)))
+        (part1, part2)
+      ).unzip
 
-    val testDirs = List(Directive(LeftToRight, 4), Directive(UpToDown, 1), Directive(LeftToRight, 2), Directive(DownToUp, 1), Directive(LeftToRight, 4), Directive(UpToDown, 10), Directive(RightToLeft, 10), Directive(DownToUp, 10))
-    val testDirs2 = List(Directive(LeftToRight, 10), Directive(UpToDown, 10), Directive(RightToLeft, 10), Directive(DownToUp, 10))
-    val path1 = Path(Point(0, 0), testDirs2)
-    println(path1.getBorders.length)
-    println(s"Area = ${path1.getArea}")
-    println(Container.fromDims(path1.height, path1.width).display(path1))
+    val path1 = Path(Point(0, 0), dirs1.toList)
+    val path2 = Path(Point(0, 0), dirs2.toList)
 
-    val dirs = lines.map :
-      case s"$dir $step ($color)" => Directive.fromLetter(dir.toCharArray.head, step.toInt)
-
-    val path = Path(Point(0, 0), dirs.toList)
-
-    println(path.getBorders.length)
-    println(s"Area = ${path.getArea}")
-    //println(Container.fromDims(path.height, path.width).display(path))
-
-    val (result1, result2) = (s"${path.getArea}", "")
+    val (result1, result2) = (s"${path1.getArea}", s"${path2.getArea}")
 
     (s"${result1}", s"${result2}")
+
+def hexToLong(input: String): Long =
+  input.map("0123456789abcdef".indexOf(_)).foldLeft(0l)((acc, newVal) => newVal + (16 * acc))
 
 class Container(input: Seq[String]):
   val width = input(0).length
@@ -71,7 +67,7 @@ class Container(input: Seq[String]):
   def display(points: List[Point]): String =
     val tempo = data.map(_.map(_.toString.head).clone())
     points.foreach:
-      point => tempo(point.lineNum)(point.colNum) = '#'
+      point => tempo(point.lineNum.toInt)(point.colNum.toInt) = '#'
     asString(tempo)
 
   def asString(data: Array[Array[Char]]) =
@@ -81,15 +77,15 @@ class Container(input: Seq[String]):
     asString(data.map(_.map(_.toString.head)))
 
 object Container:
-  def fromDims(height: Int, length: Int): Container =
-    val lines = "." * length
-    Container(0 until height map (_ => lines))
+  def fromDims(height: Long, length: Long): Container =
+    val lines = "." * length.toInt
+    Container(0 until height.toInt map (_ => lines))
 
 
-case class Directive(direction: Dir, step: Int)
+case class Directive(direction: Dir, step: Long)
 
 object Directive:
-  def fromLetter(letter: Char, steps: Int): Directive =
+  def fromLetter(letter: Char, steps: Long): Directive =
     val direction = letter match
       case 'R' => LeftToRight
       case 'D' => UpToDown
@@ -97,7 +93,7 @@ object Directive:
       case 'U' => DownToUp
     Directive(direction, steps)
 
-case class Point(lineNum: Int, colNum: Int):
+case class Point(lineNum: Long, colNum: Long):
   lazy val upLeft = this.copy()
   lazy val upRight = this.copy(colNum = colNum+1)
   lazy val downLeft = this.copy(lineNum = lineNum+1)
@@ -105,8 +101,8 @@ case class Point(lineNum: Int, colNum: Int):
 
 class Path(start: Point, dirs: List[Directive]):
   lazy val points: List[Point] = getEdges
-  lazy val height: Int = points.map(_.lineNum).max + 1 - points.map(_.lineNum).min
-  lazy val width: Int = points.map(_.colNum).max + 1 - points.map(_.colNum).min
+  lazy val height: Long = points.map(_.lineNum).max + 1 - points.map(_.lineNum).min
+  lazy val width: Long = points.map(_.colNum).max + 1 - points.map(_.colNum).min
   def getArea: Long =
     def getCoordsOfEdgesBorders: List[(Point, Point)] =
       def guessTurn(first: Point, second: Point, third: Point): Option[Turn] =
@@ -136,24 +132,26 @@ class Path(start: Point, dirs: List[Directive]):
       //closedEdges.sliding(3, 1).foreach(current=> println(s"----- > ${current}"))
       closedEdges.sliding(3, 1).map:
         case List(first, second, third) => guessTurn(first, second, third) match
-          case None => println("should not happen"); (second, second.downRight)
+          case None => None
           case Some(value) => value match
-            case LeftToRightGoUp | DownToUpGoRight => (second.upLeft, second.downRight)
-            case LeftToRightGoDown | UpToDownGoRight => (second.upRight, second.downLeft)
-            case RightToLeftGoUp | DownToUpGoLeft => (second.downLeft, second.upRight)
-            case RightToLeftGoDown | UpToDownGoLeft => (second.downRight, second.upLeft)
+            case LeftToRightGoUp | DownToUpGoRight => Some((second.upLeft, second.downRight))
+            case LeftToRightGoDown | UpToDownGoRight => Some((second.upRight, second.downLeft))
+            case RightToLeftGoUp | DownToUpGoLeft => Some((second.downLeft, second.upRight))
+            case RightToLeftGoDown | UpToDownGoLeft => Some((second.downRight, second.upLeft))
+        case _ => None
+      .filterNot(_.isEmpty)
+      .map(_.get)
       .toList
 
-    println(s"number of points = ${points.length}")
     points.length match
       case value if value >= 3 =>
         val firstBorder = getCoordsOfEdgesBorders.unzip._1
-        firstBorder.map(println)
-        println(s"=> ${calcArea(firstBorder)}")
+        //firstBorder.map(println)
+        //println(s"=> ${calcArea(firstBorder)}")
         val secondBorder = getCoordsOfEdgesBorders.unzip._2
-        println("************************")
-        secondBorder.map(println)
-        println(s"=> ${calcArea(secondBorder)}")
+        //println("************************")
+        //secondBorder.map(println)
+        //println(s"=> ${calcArea(secondBorder)}")
         max(calcArea(firstBorder), calcArea(secondBorder))
       case _ => 0l
 
@@ -178,7 +176,7 @@ class Path(start: Point, dirs: List[Directive]):
           val nextPointCalculated = nextEdge(currentPoint, head.direction, head.step)
           nextPointCalculated :: nextEdges(nextPointCalculated, tail)
 
-    def nextEdge(currentPoint: Point, dir: Dir, steps: Int): Point =
+    def nextEdge(currentPoint: Point, dir: Dir, steps: Long): Point =
       dir match
         case UpToDown => currentPoint.copy(lineNum = currentPoint.lineNum+steps)
         case DownToUp => currentPoint.copy(lineNum = currentPoint.lineNum-steps)
