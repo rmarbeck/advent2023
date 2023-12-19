@@ -1,0 +1,28 @@
+[0m[[0m[31merror[0m] [0m[0m[31m[31m-- [E018] Syntax Error: /home/rmarbeck/dev/advent2023/10-12/src/main/scala/Main.scala:289:21 [0m[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m289 |[0m    [33mval[0m [36mdirectives[0m = @unchecked  listOfPoints.zip(listOfPoints.tail :+ listOfPoints.head).map:[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m    |[0m                     ^[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m                     expression expected but [31m@[0m found[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m longer explanation available when compiling with `-explain`[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m-- [E040] Syntax Error: /home/rmarbeck/dev/advent2023/10-12/src/main/scala/Main.scala:294:6 [0m[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m294 |[0m      [33mcase[0m (point1, point2) [33mif[0m point1.colNum == point2.colNum =>[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m    |[0m      ^^^^[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m      unindent expected, but 'case' found[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m-- [E040] Syntax Error: /home/rmarbeck/dev/advent2023/10-12/src/main/scala/Main.scala:300:0 [0m[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m300 |[0m[33mdef[0m [36mcalcArea[0m([36mpoints[0m: [35mList[0m[[35mPoint[0m]): [35mLong[0m =[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m    |[0m^^^[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0meof expected, but unindent found[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m-- [E006] Not Found Error: /home/rmarbeck/dev/advent2023/10-12/src/main/scala/Main.scala:13:7 [0m[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m13 |[0m[33mimport[0m Dir._[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m   |[0m       ^^^[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m   |[0m       Not found: Dir[0m
+[0m[[0m[31merror[0m] [0m[0m[31m   |[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m   |[0m longer explanation available when compiling with `-explain`[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m-- [E007] Type Mismatch Error: /home/rmarbeck/dev/advent2023/10-12/src/main/scala/Main.scala:297:76 [0m[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m297 |[0m          [33mcase[0m [31mfalse[0m => Directive(UpToDown, point2.lineNum - point1.lineNum)[0m
+[0m[[0m[31merror[0m] [0m[0m[31m[31m    |[0m                                                                            ^[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m                                                        Found:    Unit[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m                                                        Required: Path[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m[0m
+[0m[[0m[31merror[0m] [0m[0m[31m    |[0m longer explanation available when compiling with `-explain`[0m
+[0m[[0m[31merror[0m] [0m[0m5 errors found[0m

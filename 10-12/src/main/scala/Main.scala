@@ -38,18 +38,18 @@ object Solver:
 
     val maze1 = Maze(lines)
 
-    println(maze1)
+    //println(maze1)
     println("**************")
 
     val maze = lines.map(_.toCharArray).toArray
 
     val path = Path.from(getListOfPoints(maze))
 
-    println(path.length)
+    //  println(path.length)
 
-    println(maze1.display(path))
+    //println(maze1.displayFull(path))
 
-    val path2 = Path(Point(0,0), List(Directive(LeftToRight, 5), Directive(UpToDown, 5), Directive(RightToLeft, 5), Directive(DownToUp, 5)))
+    //val path2 = Path(Point(0,0), List(Directive(LeftToRight, 5), Directive(UpToDown, 5), Directive(RightToLeft, 5), Directive(DownToUp, 5)))
 
     /*println(s" path2 ----------> ${path2.getArea} and length = ${path2.length}")
     path2.getBorders.map(println)*/
@@ -286,12 +286,12 @@ class Path(start: Point, dirs: List[Directive]):
 object Path:
   def from(listOfPoints: List[Point]): Path =
     //listOfPoints.map(println)
-    val directives = listOfPoints.zip(listOfPoints.tail).map:
+    val directives = listOfPoints.zip(listOfPoints.tail :+ listOfPoints.head).map:
       case (point1, point2) if point1.lineNum == point2.lineNum =>
         (point1.colNum - point2.colNum) > 0 match
           case true => Directive(RightToLeft, point1.colNum - point2.colNum)
           case false => Directive(LeftToRight, point2.colNum - point1.colNum)
-      case (point1, point2) if point1.colNum == point2.colNum =>
+      case (point1, point2) =>
         (point1.lineNum - point2.lineNum) > 0 match
           case true => Directive(DownToUp, point1.lineNum - point2.lineNum)
           case false => Directive(UpToDown, point2.lineNum - point1.lineNum)
