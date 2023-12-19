@@ -10,6 +10,9 @@ val loggerAOC = Logger("aoc")
 val loggerAOCPart1 = Logger("aoc.part1")
 val loggerAOCPart2 = Logger("aoc.part2")
 
+import Dir._
+import Turn._
+
 @main def hello: Unit =
   loggerAOC.trace("Root trace activated")
   loggerAOC.debug("Root debug activated")
@@ -33,20 +36,64 @@ object Solver:
     val bufferedSource = Source.fromFile("./src/main/resources/" + fileName)
     val lines = bufferedSource.getLines().toSeq
 
+    val maze1 = Maze(lines)
+
+    println(maze1)
+    println("**************")
+
     val maze = lines.map(_.toCharArray).toArray
 
-    println(s"maze size : ${maze(0).length} and ${maze.length}")
+    val path = Path.from(getListOfPoints(maze))
+
+    println(path.length)
+
+    println(maze1.display(path))
+
+    val path2 = Path(Point(0,0), List(Directive(LeftToRight, 5), Directive(UpToDown, 5), Directive(RightToLeft, 5), Directive(DownToUp, 5)))
+
+    /*println(s" path2 ----------> ${path2.getArea} and length = ${path2.length}")
+    path2.getBorders.map(println)*/
+    println(s" ----------> ${path.getArea} and length = ${path.length} => ${path.getArea - path.length}")
+    //path.points.map(println)
+
+    //println(s"maze size : ${maze(0).length} and ${maze.length}")
 
     val pipes = Seq("|", "-", "7", "F", "L", "J", "S", ".")
 
-    val (result1, result2) = (s"${resolveMaze(maze)}", "")
+    val (result1, result2) = (s"${path.length/2}", s"${path.getArea - path.length}")
 
     (s"${result1}", s"${result2}")
 
 enum Direction:
   case North, East, South, West
 
-def resolveMaze(maze: Array[Array[Char]]): Int =
+class Maze(input: Seq[String]):
+  val width = input(0).length
+  val height: Int = input.length
+  val data: Array[Array[Char]] = input.map(_.toCharArray).toArray
+
+  def displayFull(path: Path): String =
+    display(path.getBorders)
+
+  def display(path: Path): String =
+    display(path.getEdges)
+
+  def display(points: List[Point]): String =
+    val tempo = data.map(_.map(_.toString.head).clone())
+    points.foreach:
+      point => tempo(point.lineNum.toInt)(point.colNum.toInt) = '#'
+    asString(tempo)
+
+  def asString(data: Array[Array[Char]]) =
+    data.map(_.mkString(" ")).mkString("\n")
+
+  override def toString =
+    asString(data.map(_.map(_.toString.head)))
+
+def getListOfPoints(maze: Array[Array[Char]]): List[Point] =
+  resolveMaze(maze).map(value => Point(value._1.toLong, value._2.toLong)).toList
+
+def resolveMaze(maze: Array[Array[Char]]): List[(Int, Int)] =
   def findStart: (Int, Int) =
     var i, j = 0
     var found = false
@@ -63,7 +110,7 @@ def resolveMaze(maze: Array[Array[Char]]): Int =
       }
     }
 
-    println(s"i = $i, j = $j")
+    //println(s"i = $i, j = $j")
     (i, j)
 
 
@@ -131,59 +178,135 @@ def resolveMaze(maze: Array[Array[Char]]): Int =
       case None => None
       case Some(value: Seq[Direction]) => Some(output(value.filterNot(isForbidden(_)).head))
 
-  val partOfTheLoop = progressiveSnake(findStart, None).filterNot(value => value._2 == '-' || value._2 == '|').map :
-      case ((x, y), 'L') => ((x, y+1), 'L')
-      case ((x, y), 'J') => ((x+1, y+1), 'J')
-      case ((x, y), 'F') => ((x, y), 'F')
-      case ((x, y), '7') => ((x+1, y), '7')
-      case ((x, y), 'S') => ((x, y), 'S')
+  val partOfTheLoop = progressiveSnake(findStart, None).filterNot(value => value._2 == '-' || value._2 == '|').map(current => (current._1._1,current._1._2))
 
-  val toZipWith = partOfTheLoop.tail :+ partOfTheLoop.head
+  //val lengthOfQueue = progressiveSnake(findStart, None).length / 2
 
-  //partOfTheLoop.foreach(println)
 
-  val lengthOfQueue = progressiveSnake(findStart, None).length / 2
+  partOfTheLoop.toList
 
-  val area = partOfTheLoop.zip(toZipWith).foldLeft(0) { (acc, newValue) =>
-    val (x1, y1, x2, y2) = (newValue._1._1._1, newValue._1._1._2, newValue._2._1._1, newValue._2._1._2)
-    val offsets = Seq((0,0), (0, 1), (1, 0), (1, 1))
-    val results = offsets.zip(offsets).map((offset1, offset2) => (x2+offset2._1) * (y1+x2+offset1._2) - ((x1+offset1._1) * (y2+offset2._2))).foldLeft((0,0))((acc, newValue) => (math.min(acc._1, newValue), math.max(acc._2, newValue)))
-    val (minAsAbs, maxAsAbs) = (math.abs(results._1), math.abs(results._2))
-    if (minAsAbs > maxAsAbs)
-      println(s"($x1,$y1) => ($x2,$y2) => ${results._1} = ${acc + results._1}")
-      acc + results._1
-    else
-      println(s"($x1,$y1) => ($x2,$y2) => ${results._2} = ${acc + results._2}")
-      acc +  (x1, y1, x2, y2)
+
+case class Directive(direction: Dir, step: Long)
+
+object Directive:
+  def fromLetter(letter: Char, steps: Long): Directive =
+    val direction = letter match
+      case 'R' => LeftToRight
+      case 'D' => UpToDown
+      case 'L' => RightToLeft
+      case 'U' => DownToUp
+    Directive(direction, steps)
+
+case class Point(lineNum: Long, colNum: Long):
+  lazy val upLeft = this.copy()
+  lazy val upRight = this.copy(colNum = colNum+1)
+  lazy val downLeft = this.copy(lineNum = lineNum+1)
+  lazy val downRight = Point(lineNum+1, colNum+1)
+
+class Path(start: Point, dirs: List[Directive]):
+  lazy val points: List[Point] = getEdges
+  lazy val length: Int = getBorders.distinct.length
+  def getArea: Long =
+    def getCoordsOfEdgesBorders: List[(Point, Point)] =
+      def guessTurn(first: Point, second: Point, third: Point): Option[Turn] =
+        val result = (first.lineNum, third.lineNum, first.colNum, third.colNum) match
+          case (line1, line3, col1, col3) if line1 == line3 || col1 == col3 => None
+          case (line1, line3, col1, col3) if col1 > col3 && line1 < line3 =>
+            second.lineNum match
+              case value if value == line1 => Some(RightToLeftGoDown)
+              case _ => Some(UpToDownGoLeft)
+          case (line1, line3, col1, col3) if col1 > col3 && line1 > line3 =>
+            second.lineNum match
+              case value if value == line1 => Some(RightToLeftGoUp)
+              case _ => Some(DownToUpGoLeft)
+          case (line1, line3, col1, col3) if col1 < col3 && line1 < line3 =>
+            second.lineNum match
+              case value if value == line1 => Some(LeftToRightGoDown)
+              case _ => Some(UpToDownGoRight)
+          case (line1, line3, col1, col3) if col1 < col3 && line1 > line3 =>
+            second.lineNum match
+              case value if value == line1 => Some(LeftToRightGoUp)
+              case _ => Some(DownToUpGoRight)
+
+        //println(s"ligne1 ${first.lineNum} ligne3 ${third.lineNum}  < - > col1 ${first.colNum}  col3 ${third.colNum} => $result ")
+        result
+
+      val closedEdges = getEdges.dropRight(1) ::: getEdges.take(2)
+      //closedEdges.sliding(3, 1).foreach(current=> println(s"----- > ${current}"))
+      closedEdges.sliding(3, 1).map:
+        case List(first, second, third) => guessTurn(first, second, third) match
+          case None => None
+          case Some(value) => value match
+            case LeftToRightGoUp | DownToUpGoRight => Some((second.upLeft, second.downRight))
+            case LeftToRightGoDown | UpToDownGoRight => Some((second.upRight, second.downLeft))
+            case RightToLeftGoUp | DownToUpGoLeft => Some((second.downLeft, second.upRight))
+            case RightToLeftGoDown | UpToDownGoLeft => Some((second.downRight, second.upLeft))
+        case _ => None
+      .filterNot(_.isEmpty)
+      .map(_.get)
+      .toList
+
+    points.length match
+      case value if value >= 3 =>
+        val firstBorder = getCoordsOfEdgesBorders.unzip._1
+        val secondBorder = getCoordsOfEdgesBorders.unzip._2
+        max(calcArea(firstBorder), calcArea(secondBorder))
+      case _ => 0l
+
+  def getBorders: List[Point] =
+    (points).zip(points.tail :+ points.head).flatMap((point1, point2) =>
+      (point1.lineNum, point2.lineNum, point1.colNum, point2.colNum) match
+        case (x1, x2, y1, y2) if x1 == x2 => (y1 - y2 > 0) match
+          case false => y1 to y2 map (coord => Point(x1, coord))
+          case _ => y2 to y1 map (coord => Point(x1, coord))
+        case (x1, x2, y1, y2) if y1 == y2 => (x1 - x2 > 0) match
+          case false => x1 to x2 map (coord => Point(coord, y1))
+          case _ => x2 to x1 map (coord => Point(coord, y1))
+    )
+
+  def getEdges: List[Point] =
+    def nextEdges(currentPoint: Point, dirs: List[Directive]):List[Point] =
+      dirs match
+        case Nil => Nil
+        case value :: Nil => nextEdge(currentPoint, value.direction, value.step) :: Nil
+        case head :: tail =>
+          val nextPointCalculated = nextEdge(currentPoint, head.direction, head.step)
+          nextPointCalculated :: nextEdges(nextPointCalculated, tail)
+
+    def nextEdge(currentPoint: Point, dir: Dir, steps: Long): Point =
+      dir match
+        case UpToDown => currentPoint.copy(lineNum = currentPoint.lineNum+steps)
+        case DownToUp => currentPoint.copy(lineNum = currentPoint.lineNum-steps)
+        case LeftToRight => currentPoint.copy(colNum = currentPoint.colNum+steps)
+        case RightToLeft => currentPoint.copy(colNum = currentPoint.colNum-steps)
+
+    val closedDirs = dirs :+ dirs.head
+    nextEdges(start, closedDirs)
+
+object Path:
+  def from(listOfPoints: List[Point]): Path =
+    //listOfPoints.map(println)
+    val directives = listOfPoints.zip(listOfPoints.tail).map:
+      case (point1, point2) if point1.lineNum == point2.lineNum =>
+        (point1.colNum - point2.colNum) > 0 match
+          case true => Directive(RightToLeft, point1.colNum - point2.colNum)
+          case false => Directive(LeftToRight, point2.colNum - point1.colNum)
+      case (point1, point2) if point1.colNum == point2.colNum =>
+        (point1.lineNum - point2.lineNum) > 0 match
+          case true => Directive(DownToUp, point1.lineNum - point2.lineNum)
+          case false => Directive(UpToDown, point2.lineNum - point1.lineNum)
+    Path(listOfPoints.head, directives)
+
+def calcArea(points: List[Point]): Long =
+  val nextPoints = points.tail :+ points.head
+  val result = points.zip(nextPoints).foldLeft(0l) {(acc, newValues) =>
+    val (x1, y1, x2, y2) = (newValues._1.lineNum, newValues._1.colNum, newValues._2.lineNum, newValues._2.colNum)
+    acc + (x2*y1) - (x1*y2)
   }
-  
-  /*val area = partOfTheLoop.zip(toZipWith).foldLeft(0d) { (acc, newValue) =>
-    val (x1, y1, x2, y2) = (newValue._1._1._1, newValue._1._1._2, newValue._2._1._1, newValue._2._1._2)
-    val (letter1, letter2) = (newValue._1._2, newValue._2._2)
-    val (x1b, y1b, x2b, y2b) = (letter1, letter2) match
-      case ('F', 'J') => (x1, y1, x2-1, y2)
-      case ('7', 'L') => (x1+1, y1, x2, y2)
-      case _ => (x1, y1, x2, y2)
+  result / 2
 
-    println(s"($x1b,$y1b) => ($x2b,$y2b) => ${x2b * y1b - x1b * y2b}")
-    acc + (x2b * y1b - x1b * y2b)
-  }*/
+enum Turn:
+  case LeftToRightGoUp, RightToLeftGoUp, LeftToRightGoDown, RightToLeftGoDown, UpToDownGoLeft, UpToDownGoRight, DownToUpGoLeft, DownToUpGoRight
 
-
-  println(s" => ${area/2} and ${lengthOfQueue} => ${(area/2)-(lengthOfQueue)*2}")
-
-  /*val candidateToSolutionPart2 = for j <- 0 until maze(0).length
-                                     i <- 0 until maze.length
-                                 yield
-                                   if (partOfTheLoop.contains((i,j)))
-                                     loggerAOCPart2.trace(s"excluding $i, $j")
-                                     None
-                                   else
-                                     Some(i, j)*/
-
-  //loggerAOCPart2.trace(s"${partOfTheLoop.length} : ${candidateToSolutionPart2.length}, from ${maze(0).length} and ${maze.length} max")
-
-  //loggerAOCPart2.debug(s"${candidateToSolutionPart2.filterNot(_.isEmpty).length} possible")
-
-  lengthOfQueue
-
+enum Dir:
+  case UpToDown, DownToUp, LeftToRight, RightToLeft
