@@ -1,0 +1,5 @@
+[0m[[0m[0mdebug[0m] [0m[0mCopy resource mappings: [0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/home/rmarbeck/dev/advent2023/20-12/src/main/resources/logback.xml,/home/rmarbeck/dev/advent2023/20-12/target/scala-3.3.1/classes/logback.xml)[0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/home/rmarbeck/dev/advent2023/20-12/src/main/resources/test.txt,/home/rmarbeck/dev/advent2023/20-12/target/scala-3.3.1/classes/test.txt)[0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/home/rmarbeck/dev/advent2023/20-12/src/main/resources/data.txt,/home/rmarbeck/dev/advent2023/20-12/target/scala-3.3.1/classes/data.txt)[0m
+[0m[[0m[0mdebug[0m] [0m[0m	(/home/rmarbeck/dev/advent2023/20-12/src/main/resources/test2.txt,/home/rmarbeck/dev/advent2023/20-12/target/scala-3.3.1/classes/test2.txt)[0m
