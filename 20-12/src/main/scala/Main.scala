@@ -39,57 +39,15 @@ object Solver:
 
     val container = Container(lines)
 
-    /*val (lows, higths) = (
-      for
-        index <- 1 to 1000
-      yield
-        container.resetGeneric
-        val result = container.start
-        container.displayGeneric
-        result
-    ).unzip*/
-
-    //val result = lows.sum * higths.sum
-
-    val (nbLows, nbHights, nbOfCycles) = lazyList(container, List()).take(1000).foldLeft((0, 0, 0)) {(acc, newValue) =>
-      (acc._1+newValue._1, acc._2+newValue._2, acc._3 + 1)
-    }
-
-    println(s"${(nbLows, nbHights, nbOfCycles)}")
-
-    val result = ((nbLows*1000/nbOfCycles)*(nbHights*1000/nbOfCycles))
+    val result = container.solvePart1(1000)
 
     val container2 = Container(lines)
 
+    val resultb = container2.isRelevantForPart2 match
+      case false => "not relevant"
+      case true => container2.solvePart2(5000)
 
-    val resultb = lazyList2(container2, 1).take(4500).toList
-    def transform(chars: List[Char], last: Char, value: Int): String =
-      chars match
-        case Nil => s"$last"
-        case head :: tail =>
-          if (head == last)
-            transform(tail, last, value + 1)
-          else
-            s"$value${transform(tail, head, 0)}"
-
-    println(resultb.map(current => s"${current._1._1}${current._1._2}${current._1._3}${current._1._4} - ${current._2}").filterNot(_.startsWith("0000")))
-
-    println(resultb.map(current => s"${current._1._1}${current._1._2}${current._1._3}${current._1._4} - ${current._2}").filterNot(_.startsWith("0000")).filter(_.startsWith("1000")).headOption)
-    println(resultb.map(current => s"${current._1._1}${current._1._2}${current._1._3}${current._1._4} - ${current._2}").filterNot(_.startsWith("0000")).filter(_.startsWith("1100")).headOption)
-    println(resultb.map(current => s"${current._1._1}${current._1._2}${current._1._3}${current._1._4} - ${current._2}").filterNot(_.startsWith("0000")).filter(_.startsWith("1110")).headOption)
-    println(resultb.map(current => s"${current._1._1}${current._1._2}${current._1._3}${current._1._4} - ${current._2}").filterNot(_.startsWith("0000")).filter(_.startsWith("1111")).headOption)
-
-    /*val transformed = resultb match
-      case Nil => ""
-      case _ =>  transform(resultb.tail, resultb.head, 0)
-    println(transformed)*/
-
-
-    //val resultb =" "
-
-    val (result1, result2) = (s"$result", s"")
-
-
+    val (result1, result2) = (s"$result", s"$resultb")
 
     (s"${result1}", s"${result2}")
 
@@ -109,9 +67,10 @@ class Container(input: Seq[String]):
 
   destinations.zip(moduleNames.map(_.replaceAll("[\\%&]", ""))).foreach:
     case (destinationNames, moduleName) => modules.get(moduleName).foreach {currentSourceModule =>
-      destinationNames.map(modules.get(_)).filter(_.isDefined).foreach {
+      destinationNames.map(modules.get(_)).foreach {
         case Some(moduleToAppend) =>
           currentSourceModule.destinations.append(moduleToAppend)
+        case None => ()
       }
     }
 
@@ -121,33 +80,23 @@ class Container(input: Seq[String]):
         case module: Module => conjunctionModule.addInput(module)
     case _ => ()
 
-  def getFlag(index: Int): Char =
+  def solvePart1(maxSteps: Int): Long =
+    val (nbLows, nbHighs, nbOfCycles) = lazyListPart1(this, List()).take(maxSteps).foldLeft((0, 0, 0)):
+      case ((accLows, accHighs, accNbOfCyles), (newLows, newHighs)) => (accLows + newLows, accHighs + newHighs, accNbOfCyles + 1)
+
+    (nbLows * maxSteps / nbOfCycles) * (nbHighs * maxSteps / nbOfCycles)
+
+  def solvePart2(maxSteps: Int): Long =
+    lazyListPart2(this, 1, None).take(maxSteps).filter(_.isDefined).map(_.get).foldLeft(1l) (_ * _)
+
+  def isRelevantForPart2: Boolean =
+    destinations.flatten.contains("rx")
+
+  def getFlags: String =
     modules.get("jq").map:
-      case value: Conjunction => value.getMaxFlags.drop(index).head match
-        case '1' => '1'
-        case _ => '0'
-      case _ => 'x'
-    .getOrElse('x')
-
-  def getGeneric: Int =
-    modules.get("rx").map:
-      case value: Generic => value.count
-      case _ => -1
-    .getOrElse(-1)
-
-  def isGenericASuccess: Boolean =
-    modules.get("rx").map:
-      case value: Generic if (value.count == 1) => true
-      case _ => false
-    .getOrElse(true)
-
-  def displayGeneric =
-    modules.get("rx").map:
-      case value: Generic =>
-        if (value.count == 1)
-          println("WINNNNNNNNNNNN")
-        println(value.count)
-      case _ => println(-1)
+      case value: Conjunction => value.getMaxFlags
+      case _ => "not possible"
+    .getOrElse("empty")
 
   def resetGeneric =
     modules.get("rx").map:
@@ -198,11 +147,9 @@ class Switch(var status: Boolean):
     status = !status
 
 sealed abstract class Module(val name: String, val destinations: Destinations = Destinations.default):
-  def receiveSignal: Unit = ()
   def status: List[Boolean] = List()
   def reactTo(flow: Flow) : List[Flow] =
     val result = doReactTo(flow)
-    //println(s"sending ${result.filter(_.pulse == Low).length} Low, and ${result.filter(_.pulse == High).length} High")
     result
 
   def doReactTo(flow: Flow) : List[Flow]
@@ -225,12 +172,12 @@ case class FlipFlop(override val name: String, switch: Switch = Switch(false)) e
 
 case class Conjunction(override val name: String, val lastInputs: Map[String, Pulse] = Map[String, Pulse]()) extends Module(name):
   def getMaxFlags = maxFlags
-  var maxFlags = "0"*4
+  var maxFlags = ""
   override def status: List[Boolean] = lastInputs.values.map(currentPulse => if currentPulse  == Low then false else true).toList
 
-  override def receiveSignal: Unit = maxFlags = ""*lastInputs.toList.length
   def addInput(moduleSource: Module) =
     lastInputs.put(moduleSource.name, Low)
+    maxFlags = "0" * lastInputs.toList.length
   def updateSwitchFromModule(module: Module, pulse: Pulse): Unit =
     lastInputs.get(module.name) match
       case Some(value) => lastInputs.put(module.name, pulse)
@@ -239,17 +186,9 @@ case class Conjunction(override val name: String, val lastInputs: Map[String, Pu
   override def doReactTo(flow: Flow): List[Flow] =
     loggerAOC.trace(s"In ${this} ${this.lastInputs.head}, flow is from ${flow.moduleSource}")
     val tempo = lastInputs.values.map(value => if value == Low then "0" else "1").mkString
-    if (name == "jq")
-      if (lastInputs.filter((_, pulse) => pulse == High).toList.length > 0)
-        loggerAOC.trace(s"${lastInputs.values.map(value => if value == Low then "0" else "1").mkString} <-> $tempo, ${tempo.filter(_ != '0')} and $maxFlags")
-
     maxFlags = tempo.zip(maxFlags).map((fromTemp, fromMax) => if (fromTemp == '1' || fromMax == '1') then '1' else '0').mkString
 
-    if (name == "jq")
-      loggerAOC.trace(s"$maxFlags")
-
     updateSwitchFromModule(flow.moduleSource, flow.pulse)
-
 
     lastInputs.filterNot((_, pulse) => pulse == High).toList.length == 0 match
       case true =>
@@ -279,33 +218,28 @@ case class Generic(override val name: String) extends Module(name):
 
   override def toString: String = s"Generic()"
 
-def lazyList(container: Container, statuses: List[String]): LazyList[(Int, Int)] =
+def lazyListPart1(container: Container, statuses: List[String]): LazyList[(Int, Int)] =
+  val statusBeforePush = container.status
+  val newStatuses = statusBeforePush +: statuses
   val result = container.pushButton
-  val currentStatus = container.status
+  val statusAfterPush = container.status
 
-  if statuses.find(_ == currentStatus).isDefined then LazyList.empty
-  else LazyList.cons(result, lazyList(container, currentStatus +: statuses))
+  if statuses.find(_ == statusBeforePush).isDefined then LazyList.empty
+  else LazyList.cons(result, lazyListPart1(container, newStatuses))
 
-
-var results = Map[String, Int]()
-@tailrec
-def waitLow(container: Container, steps: Int): Int =
-  if (steps == 0)
-    results = Map[String, Int]()
-    container.resetGeneric
-  container.pushButton
-  val status = container.status
-  results.put(status, results.getOrElseUpdate(status, 0) + 1)
-  if container.isGenericASuccess  || steps == 900000 then results.values.toList.length
-  else waitLow(container, steps + 1)
-
-def lazyList2(container: Container, steps: Int): LazyList[((Char, Char, Char, Char), Int)] =
+def lazyListPart2(container: Container, steps: Int, flags: Option[String]): LazyList[Option[Long]] =
   if (steps == 1)
     container.resetGeneric
   container.pushButton
 
-  if container.isGenericASuccess then LazyList.empty
-  else LazyList.cons(((container.getFlag(0), container.getFlag(1), container.getFlag(2),container.getFlag(3)), steps), lazyList2(container, steps+1))
+  val newFlags = container.getFlags
+  val newFlagsIsDifferentFromLast = flags.map(_ != newFlags).getOrElse(false)
+  val valueToYield = newFlagsIsDifferentFromLast match
+    case true => Some(steps.toLong)
+    case false => None
+
+  if flags.map(_.filter(_ == '0').length == 0).getOrElse(false) then LazyList.empty
+  else LazyList.cons(valueToYield, lazyListPart2(container, steps + 1, Some(newFlags)))
 
 enum Pulse:
   case Low, High
