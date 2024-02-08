@@ -1,3 +1,5 @@
+import scala.reflect.ClassTag
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
@@ -66,4 +68,4 @@ trait FromColors[T]:
 def fromColors[T : FromColors](colors: List[Int]): T =
   colors match
     case reds :: blues :: greens :: Nil => summon[FromColors[T]].fromColors(reds, blues, greens)
-    case value => throw Exception(s"Cannot create Bag from List : $value")
+    case value => throw Exception(s"Cannot create from List : $value")
