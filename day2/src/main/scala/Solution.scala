@@ -4,7 +4,7 @@ object Solution:
     val games = inputLines.map:
       case s"Game $gameNumber: $games" => Game(gameNumber.toInt, Draw.fromListOfRawResults(games))
 
-    val bag = Bag(12, 14, 13)
+    val bag = Bag(reds = 12, blues = 14, greens = 13)
 
     val resultPart1 = games.filter(_.isBagContentPossible(bag)).map(_.number).sum
     val resultPart2 = games.map(_.minimalBagPossible.power).sum
