@@ -20,10 +20,8 @@ case class Bag(reds: Int, blues: Int, greens: Int):
   def power: Long = reds * blues * greens
 
 object Bag:
-  def fromColors(colors: List[Int]): Bag =
-    colors match
-      case reds :: blues :: greens :: Nil => Bag(reds, blues, greens)
-      case value => throw Exception(s"Cannot create Bag from List : $value")
+  given FromColors[Bag] with
+    override def fromColors(reds: Int, blues: Int, greens: Int): Bag = Bag(reds, blues, greens)
 
 case class Draw(reds: Int, blues: Int, greens: Int):
   def colors: List[Int] = List(reds, blues, greens)
@@ -31,6 +29,9 @@ case class Draw(reds: Int, blues: Int, greens: Int):
     bag.reds < reds || bag.blues < blues || bag.greens < greens
 
 object Draw:
+  given FromColors[Draw] with
+    override def fromColors(reds: Int, blues: Int, greens: Int): Draw = Draw(reds, blues, greens)
+
   def fromListOfRawResults(resultsAsString: String): Seq[Draw] =
     def fromRawResult(singleResultAsString: String): Draw =
       val colors = singleResultAsString.split(", ").map:
@@ -40,7 +41,7 @@ object Draw:
         case value => throw Exception(s"Not supported format : $value")
 
       val singleColors = colors.unzip3.toList.map(_.sum)
-      Draw(singleColors(0), singleColors(1), singleColors(2))
+      fromColors[Draw](singleColors)
 
     resultsAsString.split("; ").map(fromRawResult(_)).toSeq
 
@@ -49,7 +50,20 @@ case class Game(number: Int, draws: Seq[Draw]):
     val colorsOfBag = draws.foldLeft(List(0, 0, 0)):
       case (acc, draw) => acc.zip(draw.colors).map(math.max(_, _))
 
-    Bag.fromColors(colorsOfBag)
+    fromColors[Bag](colorsOfBag)
 
   def isBagContentPossible(bag: Bag): Boolean =
     ! draws.exists(_.cannotGoOutFromBag(bag))
+
+/**
+ *
+ * Type class to create from list of Ints an instance that needs all three colors
+ *
+ */
+trait FromColors[T]:
+  def fromColors(reds: Int, blues: Int, greens: Int): T
+
+def fromColors[T : FromColors](colors: List[Int]): T =
+  colors match
+    case reds :: blues :: greens :: Nil => summon[FromColors[T]].fromColors(reds, blues, greens)
+    case value => throw Exception(s"Cannot create Bag from List : $value")
