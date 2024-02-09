@@ -1,6 +1,6 @@
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
-    val cards = inputLines.toList.map(Card.fromString(_))
+    val cards = inputLines.map(Card.fromString)
 
     val resultPart1 = cards.map(_.score).sum
 
