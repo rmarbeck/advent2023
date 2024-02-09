@@ -1,12 +1,11 @@
 import scala.annotation.tailrec
-import scala.reflect.ClassTag
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val (numbers, symbols) = inputLines.zipWithIndex.map((currentLine, row) => getNumbersAndSymbols(currentLine, row)).unzip
+    val (numbers, symbols) = getNumbersAndSymbols(inputLines)
 
-    val resultPart1 = getTouching(numbers.flatten.toList, symbols.flatten.toSet).toList.map(_.value.toLong)
+    val resultPart1 = getTouching(numbers.toList, symbols.toSet).toList.map(_.value.toLong)
 
     val result1 = s"${resultPart1.sum}"
     val result2 = s""
@@ -48,11 +47,16 @@ case class Symbol(value: Char, position: Position) extends Element(position):
   override val colMin = position.col
   override val colMax = colMin
 
-def getNumbersAndSymbols(inputString: String, inRow: Int): (List[Number], List[Symbol]) =
-  val numbers = inputString.zipWithIndex.filter(_._1.isDigit).foldLeft((List[Number](), -1)):
-    case ((acc, nextIndexExpected), (digit, index)) if index == nextIndexExpected => ((acc.head * 10 + digit.asDigit) +: acc.tail, index + 1)
-    case ((acc, nextIndexExpected), (digit, index)) => (Number(digit.asDigit, Position(inRow, index)) +: acc, index + 1)
-  ._1
+def getNumbersAndSymbols(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
+  val numbers =
+    inputString.zipWithIndex.flatMap:
+      case (line, row) => line.zipWithIndex.filter(_._1.isDigit).foldLeft((List[Number](), -1)):
+        case ((acc, nextIndexExpected), (digit, index)) if index == nextIndexExpected => ((acc.head * 10 + digit.asDigit) +: acc.tail, index + 1)
+        case ((acc, nextIndexExpected), (digit, index)) => (Number(digit.asDigit, Position(row, index)) +: acc, index + 1)
+      ._1
 
-  val symbols = inputString.zipWithIndex.filterNot(_._1.isDigit).filterNot(_._1 == '.').map((symbol, index) => Symbol(symbol, Position(inRow, index)))
-  (numbers,symbols.toList)
+  val symbols =
+    inputString.zipWithIndex.flatMap:
+      case (line, row) => line.zipWithIndex.filterNot(_._1.isDigit).filterNot(_._1 == '.').map((symbol, index) => Symbol(symbol, Position(row, index)))
+
+  (numbers,symbols)
