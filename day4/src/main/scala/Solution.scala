@@ -7,10 +7,12 @@ object Solution:
     val totalCards = Array.fill(cards.size)(1)
     for
       currentCard <- cards
-      if currentCard.winnings != 0
+      winnings = currentCard.winnings
+      if winnings != 0
+      currentCardIndex = currentCard.id - 1
     do
-      val numberOfCurrentCard = totalCards(currentCard.id - 1)
-      (currentCard.id to currentCard.id + currentCard.winnings - 1).foreach:
+      val numberOfCurrentCard = totalCards(currentCardIndex)
+      (currentCardIndex + 1 to currentCardIndex + winnings).foreach:
         case index =>
           totalCards.isDefinedAt(index) match
             case true => totalCards(index) += numberOfCurrentCard
