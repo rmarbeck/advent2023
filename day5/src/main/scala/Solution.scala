@@ -23,9 +23,8 @@ object Solution:
 
     val resultPart1 = seeds.map(finalLayer.solve).min
 
-    val resultPart2 = seeds.toList.sliding(2, 2).map:
-      case List(first: Long, second: Long) => finalLayer.solveRange(first, first + second)
-      case value => throw Exception(s"Should not happen : $value")
+    val resultPart2 = seeds.grouped(2).map:
+      case Seq(first: Long, second: Long) => finalLayer.solveRange(first, first + second)
     .min
 
     val result1 = s"$resultPart1"

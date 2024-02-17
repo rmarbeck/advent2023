@@ -58,32 +58,24 @@ case class SingleLayerRangeSet(name: String, ranges: List[RangeMap]):
       val ranges = SingleLayerRangeSet.toListOfRange(newLimits, topLevelRange.endIncluded + 1)
       (headIsEmpty, topLevelRange.start < inRange.keys.toList.sorted.minOption.getOrElse(topLevelRange.start)) match
         case (true, true) =>
-          loggerAOCPart2.debug(s"in true within $topLevelRange is $inRange, generating $ranges")
           (RangeMap(topLevelRange.start, inRange.keys.toList.sorted.min - 1, topLevelRange.drift) +: ranges).sortBy(_.start)
         case _ =>
           ranges
 
-    loggerAOCPart2.debug(s"Merging with $topLevelRange in ${limitsDriftedTo(topLevelRange.drift)}")
     val headMatching = limitsDriftedTo(topLevelRange.drift).filterNot((key, _) => key > topLevelRange.endIncluded)
     val (includingFirst, others) = headMatching.span((key, _) => key < topLevelRange.start)
 
-    loggerAOCPart2.trace(s"headMatching is $headMatching")
 
     val newHead = manageNextStartsBefore(includingFirst.lastOption, others.headOption)
 
-    loggerAOCPart2.debug(s"within $topLevelRange, new head is $newHead")
 
     val newBody = manageInRange(others, newHead.isEmpty)
-    loggerAOCPart2.trace(s"have to merge with : ${includingFirst.lastOption} and $others => new head = $newHead and new body = $newBody")
-
-    loggerAOCPart2.trace(s"=> ${newHead ::: newBody}")
 
     val output =
       newHead ::: newBody match
         case Nil => List(topLevelRange)
         case value => value
 
-    loggerAOCPart2.debug(s"$topLevelRange => ${output}")
     output
 
 object SingleLayerRangeSet:
@@ -92,7 +84,7 @@ object SingleLayerRangeSet:
 
   def rangesDoNotOverlap(sortedRanges: List[RangeMap]): Boolean =
     val overlapingDetected =
-      sortedRanges.tapEach(current => loggerAOCPart2.trace(current.toString)).sliding(2, 1).exists:
+      sortedRanges.sliding(2, 1).exists:
         case List(first, second) => second.start <= first.endIncluded
         case _ => false
     !overlapingDetected
