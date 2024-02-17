@@ -1,14 +1,16 @@
+import MultiLayerSolver.merge
 
-
+case class MultiLayerSolver(layers: List[SingleLayerRangeSet]):
+  private val mergedLayer = merge(layers)
+  def solve(value: Long): Long = solveRange(value, value)
+  def solveRange(startIncluded: Long, endIncluded: Long): Long = mergedLayer.solveRange(startIncluded, endIncluded)
 
 object MultiLayerSolver:
-  def solveRange(startIncluded: Long, endIncluded: Long): Long = ???
-
-  def merge(layers: List[SingleLayerRangeSet]): SingleLayerRangeSet =
+  private def merge(layers: List[SingleLayerRangeSet]): SingleLayerRangeSet =
     layers.tail.foldLeft(layers.head):
       case (acc, newLayer) => mergeIn(acc, newLayer)
 
-  def mergeIn(initialLayer: SingleLayerRangeSet, nextLevelLayer: SingleLayerRangeSet): SingleLayerRangeSet =
+  private def mergeIn(initialLayer: SingleLayerRangeSet, nextLevelLayer: SingleLayerRangeSet): SingleLayerRangeSet =
     val initialLayerSlices =
       initialLayer.sortedRanges match
         case initialRange @ head :: tail if head.start == 0 => initialRange

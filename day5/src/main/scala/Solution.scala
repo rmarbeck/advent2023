@@ -17,50 +17,16 @@ object Solution:
     .split("#")
     .map(Mapper.fromString)
 
-    val mappingService = MappingService(mappers)
-
-    val resultPart1 = seeds.map(mappingService.map(_)).min
-
-    /*val mappingFunctions = mappers.map(MappingFunction.fromMapper)
-
-    val aggregate = mappingFunctions.tail.foldLeft(mappingFunctions.head):
-      case (acc, newFunction) => acc.digest(newFunction)
-
-    println(s"intermediate is ${aggregate.smallestFrom(79, 93)}")
-    println(s"intermediate is ${aggregate.smallestFrom(55, 68)}")*/
-
     val layers = mappers.map(SingleLayerRangeSet.from)
 
-    val finalLayer = MultiLayerSolver.merge(layers.toList)
+    val finalLayer = MultiLayerSolver(layers.toList)
 
+    val resultPart1 = seeds.map(finalLayer.solve).min
 
-    //println(s" OK ${finalLayer}")
-    //println(s" NOT OK ${MultiLayerSolver.merge(layers.toList.dropRight(1))}")
-
-    /*println(s"value of 82 is ${finalLayer.solve(82)}")
-    println(s"value of 79 is ${finalLayer.solve(79)}")
-    println(s"value of 14 is ${finalLayer.solve(14)}")
-    println(s"value of 55 is ${finalLayer.solve(55)}")
-    println(s"value of 13 is ${finalLayer.solve(13)}")
-
-    println(s"intermediate is ${finalLayer.solveRange(79, 93)}")
-    println(s"intermediate is ${finalLayer.solveRange(55, 68)}")*/
-
-    val result = seeds.toList.sliding(2, 2).map:
+    val resultPart2 = seeds.toList.sliding(2, 2).map:
       case List(first: Long, second: Long) => finalLayer.solveRange(first, first + second)
       case value => throw Exception(s"Should not happen : $value")
     .min
-
-    val resultPart2 = result
-
-    /*val seedsPart2 = seeds.toList.sliding(2, 2).map:
-      case first :: second :: Nil => first until first + second
-
-    val resultPart2 = seedsPart2.map:
-      case currentSeedRange =>
-        currentSeedRange.foldLeft(Long.MaxValue):
-          case (acc, seed) => math.min(acc, mappingService.map(seed))
-    .min*/
 
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
@@ -68,17 +34,6 @@ object Solution:
     (s"${result1}", s"${result2}")
 
 end Solution
-
-class MappingService(val mappers: Array[Mapper]):
-  val cachedMap: mutable.Map[Long, Long] = mutable.HashMap[Long, Long]()
-
-  def map(source: Long): Long =
-    //cachedMap.getOrElseUpdate(source, doLocate(source))
-    doLocate(source)
-
-  private def doLocate(seedValue: Long): Long =
-    mappers.foldLeft(seedValue):
-      case (acc, mapper) => mapper.map(acc)
 
 case class Mapping(destinationStart: Long, sourceStart: Long, length: Long):
   def matches(source: Long): Boolean =
