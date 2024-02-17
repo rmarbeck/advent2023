@@ -1,4 +1,3 @@
-import scala.collection.mutable
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -34,34 +33,9 @@ object Solution:
 
 end Solution
 
-case class Mapping(destinationStart: Long, sourceStart: Long, length: Long):
-  def matches(source: Long): Boolean =
-    source - sourceStart match
-      case value if value < 0 => false
-      case value if value > length => false
-      case _ => true
-  def follow(source: Long): Long =
-    matches(source) match
-      case false => source
-      case true => destinationStart + source - sourceStart
+case class Mapping(destinationStart: Long, sourceStart: Long, length: Long)
 
-  def mergeWithPreviousLevel(previousMapping: Mapping): (Option[Mapping], Option[Mapping], Option[Mapping]) = ???
-
-case class Mapper(name: String, mappings: List[Mapping]):
-  def map(source: Long): Long =
-    mappings.find(_.matches(source)) match
-      case Some(mapping) => mapping.follow(source)
-      case None => source
-
-  def mergeWith(other: Mapper): Mapper =
-    def from(mapping: Mapping): List[Mapping] =
-      val (initialDestination, initialSource, initialLength) = (mapping.destinationStart, mapping.sourceStart, mapping.length)
-
-      Nil
-
-    val finalMappings = this.mappings.flatMap(from(_))
-    Mapper(this.name+"-"+other.name, finalMappings)
-
+case class Mapper(name: String, mappings: List[Mapping])
 object Mapper:
   def fromString(formatedInput: String): Mapper =
     formatedInput match
