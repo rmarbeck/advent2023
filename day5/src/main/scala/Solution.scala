@@ -34,19 +34,24 @@ object Solution:
     val finalLayer = MultiLayerSolver.merge(layers.toList)
 
 
-    println(s" OK ${finalLayer}")
+    //println(s" OK ${finalLayer}")
     //println(s" NOT OK ${MultiLayerSolver.merge(layers.toList.dropRight(1))}")
 
-    println(s"value of 82 is ${finalLayer.solve(82)}")
+    /*println(s"value of 82 is ${finalLayer.solve(82)}")
     println(s"value of 79 is ${finalLayer.solve(79)}")
     println(s"value of 14 is ${finalLayer.solve(14)}")
     println(s"value of 55 is ${finalLayer.solve(55)}")
     println(s"value of 13 is ${finalLayer.solve(13)}")
 
     println(s"intermediate is ${finalLayer.solveRange(79, 93)}")
-    println(s"intermediate is ${finalLayer.solveRange(55, 68)}")
+    println(s"intermediate is ${finalLayer.solveRange(55, 68)}")*/
 
-    val resultPart2 = "unknown"
+    val result = seeds.toList.sliding(2, 2).map:
+      case List(first: Long, second: Long) => finalLayer.solveRange(first, first + second)
+      case value => throw Exception(s"Should not happen : $value")
+    .min
+
+    val resultPart2 = result
 
     /*val seedsPart2 = seeds.toList.sliding(2, 2).map:
       case first :: second :: Nil => first until first + second

@@ -112,7 +112,7 @@ class RangeMapSuite extends munit.FunSuite:
 class RangeMapCritialSuite extends munit.FunSuite:
   test("Critical test"):
 
-    val topLayer = SingleLayerRangeSet("seed-to-soil-soil-to-fertilizer-fertilizer-to-water-water-to-light",List(RangeMap(0,13,21), RangeMap(14,14,28), RangeMap(15,21,20), RangeMap(22,25,28), RangeMap(44,49,44), RangeMap(50,49,-31), RangeMap(50,51,-31), RangeMap(52,58,-9), RangeMap(59,92,-5), RangeMap(93,97,2), RangeMap(98,98,-4), RangeMap(99,99,-81)))
+    val topLayer = SingleLayerRangeSet("seed-to-soil-soil-to-fertilizer-fertilizer-to-water-water-to-light",List(RangeMap(0,13,21), RangeMap(14,14,28), RangeMap(15,21,20), RangeMap(22,25,28), RangeMap(26,43,0), RangeMap(44,49,44), RangeMap(50,51,-31), RangeMap(52,58,-9), RangeMap(59,92,-5), RangeMap(93,97,2), RangeMap(98,98,-4), RangeMap(99,99,-81)))
 
     val rangeLevel21 = RangeMap.from(destinationOfStart = 45, start = 77, length = 23)
     val rangeLevel22 = RangeMap.from(destinationOfStart = 81, start = 45, length = 19)
