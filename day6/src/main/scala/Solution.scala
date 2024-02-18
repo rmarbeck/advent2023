@@ -3,7 +3,7 @@ object Solution:
 
     val data = inputLines.map:
       case s"$data:$values" => values.split(" ").filterNot(_.isEmpty).map(_.toLong)
-    
+
     val Seq(resultPart1, resultPart2) = Seq(Race.fromDataPart1, Race.fromDataPart2).map(_.apply(data).map(_.findWaysToBeatTheRecord).product)
 
     val result1 = s"$resultPart1"
@@ -28,14 +28,14 @@ case class Race(time: Long, record: Long):
 
   def findWaysToBeatTheRecord: Int =
     val (a, b, c) = (-1, time.toDouble, -record)
-    val delta: Double = b * b - 4 * a *c
-    val solution1 = (- b - math.sqrt(delta)) / (2 * a)
-    val solution2 = (- b + math.sqrt(delta)) / (2 * a)
+    val deltaSquareRoot: Double = math.sqrt( b * b - 4 * a *c )
+    val solution1 = (- b - deltaSquareRoot) / (2 * a)
+    val solution2 = (- b + deltaSquareRoot) / (2 * a)
     nbIntBetween(solution1, solution2)
 
 object Race:
   def fromDataPart1(data: Seq[Array[Long]]): Seq[Race] =
-    data.head.zipWithIndex.map((time, index) => Race(time, data(1)(index))).toIndexedSeq
+    data.head.zip(data.last).map((time, record) => Race(time, record)).toIndexedSeq
 
   def fromDataPart2(data: Seq[Array[Long]]): Seq[Race] =
     val Seq(time, record) = data.map(_.mkString.toLong)
