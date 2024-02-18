@@ -1,3 +1,4 @@
+import scala.collection.immutable.HashMap
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -27,14 +28,18 @@ end Solution
 
 case class Card(char: Char):
   val List(ordinalPart1, ordinalPart2) = List(Card.ordinalsPart1, Card.ordinalsPart2).map:
-    case ordinals => ordinals.zipWithIndex.find(_._1 == char) match
-      case Some(value) => value._2
+    case ordinals => ordinals.get(char) match
+      case Some(value) => value
       case None => throw Exception(s"Not valid card : $char")
 
 object Card:
+  private def asHashMap(orderedCards: List[Char]): Map[Char, Int] =
+    HashMap[Char, Int](orderedCards.zipWithIndex.map:
+      case (char, index) => char -> index
+    : _*)
   private val letters: List[Char] = List('A', 'K', 'Q', 'J', 'T')
-  private val ordinalsPart1: List[Char] = letters ::: (9 to 2 by -1).map(_.toString.head).toList
-  private val ordinalsPart2: List[Char] = letters.filterNot(_ == 'J') ::: (9 to 2 by -1).map(_.toString.head).toList ::: List('J')
+  private val ordinalsPart1: Map[Char, Int] = asHashMap(letters ::: (9 to 2 by -1).map(_.toString.head).toList)
+  private val ordinalsPart2: Map[Char, Int] = asHashMap(letters.filterNot(_ == 'J') ::: (9 to 2 by -1).map(_.toString.head).toList ::: List('J'))
 
   given part1Ordering: Ordering[Card] with
     def compare(first: Card, second: Card): Int =
