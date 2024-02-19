@@ -10,10 +10,9 @@ object Solution:
 
     val resultPart1 = search(network, "AAA", moves)
 
-    val part2Start = network.keys.filter(_(2) == 'A').toList
-    val resultPart2 = lowest {
-      part2Start.map:
-        case currentStart => search(network, currentStart, moves)
+    val part2Start = network.keys.filter(_.last == 'A').toList
+    val resultPart2 = lowestProduct {
+      part2Start.map(search(network, _, moves))
     }
 
     val result1 = s"$resultPart1"
@@ -23,31 +22,9 @@ object Solution:
 
 end Solution
 
-def gcd(first: Long, second: Long): Long =
-  (first, second) match
-    case (0, value) => value
-    case (xValue, yValue) if xValue < 0 => gcd(-xValue, yValue)
-    case (xValue, yValue) if yValue < 0 => -gcd(xValue, -yValue)
-    case (xValue, yValue) => gcd(yValue % xValue, xValue)
-
-def lowest(values: List[Long]): Long =
-  values match
-    case head :: Nil => head
-    case head :: tail =>
-      val gcds =
-        tail.map:
-          case currentFromTail => gcd(head, currentFromTail)
-
-      val commonGcd = gcds.distinct.length match
-        case 1 => gcds(0)
-        case _ => throw Exception(s"No common GCD found")
-
-      values.map(_ / commonGcd).product * commonGcd
-    case _ => throw Exception(s"Not managed")
-
 @tailrec
 def search(in: Map[String, LeftOrRight], from: String, via: String, inter: Long = 0) : Long =
-  from(2) == 'Z' match
+  from.last == 'Z' match
     case true => inter
     case false =>
       val currentMove = via.charAt((inter%via.size).toInt)
@@ -75,3 +52,26 @@ case class LeftOrRight(left: String, right: String):
       case Left => left
       case Right => right
   def extract(move: Char): String = extract(LorR.from(move))
+
+
+def gcd(first: Long, second: Long): Long =
+  (first, second) match
+    case (0, value) => value
+    case (xValue, yValue) if xValue < 0 => gcd(-xValue, yValue)
+    case (xValue, yValue) if yValue < 0 => -gcd(xValue, -yValue)
+    case (xValue, yValue) => gcd(yValue % xValue, xValue)
+
+def lowestProduct(values: List[Long]): Long =
+  values match
+    case head :: Nil => head
+    case head :: tail =>
+      val gcds =
+        tail.map:
+          case currentFromTail => gcd(head, currentFromTail)
+
+      val commonGcd = gcds.distinct.length match
+        case 1 => gcds(0)
+        case _ => throw Exception(s"No common GCD found")
+
+      values.map(_ / commonGcd).product * commonGcd
+    case _ => throw Exception(s"Not managed")
