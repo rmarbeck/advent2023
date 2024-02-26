@@ -14,12 +14,36 @@ end Solution
 
 type Tile = Special | Connector
 
+enum Direction:
+  case North, East, South, West
+export Direction.*
+
 enum Special:
   case Start, Ground
 export Special.*
 
-enum Connector:
-  case NorthSouth, EastWest, NorthEast, NorthWest, SouthWest, SouthEast
+enum Connector(val directions: (Direction, Direction)):
+  private case NorthSouth extends Connector((North , South))
+  private case EastWest extends Connector((East , West))
+  private case NorthEast extends Connector((North , East))
+  private case NorthWest extends Connector((North , West))
+  private case SouthWest extends Connector((South , West))
+  private case SouthEast extends Connector((South , East))
+
+  def connects(direction: Direction): Boolean = directions.toList.exists(_ == direction)
+
+object Connector:
+  def unapply(connector: Connector): (Direction, Direction) = connector.directions
+  def from(char: Char) =
+    char match
+      case '|' => NorthSouth
+      case '-' => EastWest
+      case 'L' => NorthEast
+      case 'J' => NorthWest
+      case '7' => SouthWest
+      case 'F' => SouthEast
+      case _ => throw Exception("Not managed")
+
 export Connector.*
 
 case class Coords(row: Int, col: Int):
@@ -28,22 +52,23 @@ case class Coords(row: Int, col: Int):
   lazy val east = this.copy(col = col + 1)
   lazy val west = this.copy(col = col - 1)
 
+  def move(direction: Direction) =
+    direction match
+      case North => north
+      case East => east
+      case South => south
+      case West => west
+
   def isDefined(using field: Field): Boolean =
     row >= 0 && row <= field.height - 1  && col >= 0  && col <= field.width - 1
 
 case class Field(input: Seq[String]):
-  val data: Array[Array[Tile]] =
+  private val data: Array[Array[Tile]] =
     input.toArray.map:
       _.toCharArray.map:
         case 'S' => Start
         case '.' => Ground
-        case '|' => NorthSouth
-        case '-' => EastWest
-        case 'L' => NorthEast
-        case 'J' => NorthWest
-        case '7' => SouthWest
-        case 'F' => SouthEast
-        case _ => throw Exception("Not managed")
+        case other => Connector.from(other)
 
   lazy val height: Int = data.length
   lazy val width: Int = data(0).length
@@ -53,14 +78,13 @@ case class Field(input: Seq[String]):
   def next(from: Coords): List[Coords] =
     def manageStart: List[Coords] =
       given Field = this
-
-      val toStartAt = List(from.north, from.east, from.south, from.west).zipWithIndex.filter(_._1.isDefined).map:
-        (coords, index) => (coords, valueAt(coords), index)
+      val toStartAt = Direction.values.map(currentDir => (from.move(currentDir), currentDir)).filter(_._1.isDefined).map:
+        (coords, direction) => (coords, valueAt(coords), direction)
       .find:
-          case (_, NorthSouth | SouthWest | SouthEast, 0) => true
-          case (_, NorthSouth | NorthEast | NorthWest, 2) => true
-          case (_, EastWest | NorthWest | SouthWest, 1) => true
-          case (_, EastWest | NorthEast | SouthEast, 3) => true
+          case (_, connector: Connector, North) if connector.connects(South) => true
+          case (_, connector: Connector, East) if connector.connects(West) => true
+          case (_, connector: Connector, South) if connector.connects(North) => true
+          case (_, connector: Connector, West) if connector.connects(East) => true
           case _ => false
       .map(_._1)
 
@@ -68,12 +92,7 @@ case class Field(input: Seq[String]):
 
     valueAt(from) match
       case Start => manageStart
-      case NorthSouth => List(from.north, from.south)
-      case EastWest => List(from.east, from.west)
-      case NorthEast => List(from.north, from.east)
-      case NorthWest => List(from.north, from.west)
-      case SouthWest => List(from.south, from.west)
-      case SouthEast => List(from.south, from.east)
+      case Connector(firstDir, secondDir) => List(from.move(firstDir), from.move(secondDir))
       case _ => throw Exception("Not managed")
 
   lazy val loopSize: Int =
