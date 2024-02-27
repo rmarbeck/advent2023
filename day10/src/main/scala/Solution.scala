@@ -85,28 +85,6 @@ case class Field(input: Seq[String]):
   lazy val height: Int = data.length
   lazy val width: Int = data(0).length
 
-  def valueAt(position: Coords): Tile = data(position.row)(position.col)
-
-  def next(from: Coords): List[Coords] =
-    def manageStart: List[Coords] =
-      given Field = this
-      val toStartAt = Direction.values.map(currentDir => (from.move(currentDir), currentDir)).filter(_._1.isDefined).map:
-        (coords, direction) => (coords, valueAt(coords), direction)
-      .find:
-          case (_, connector: Connector, North) if connector.connects(South) => true
-          case (_, connector: Connector, East) if connector.connects(West) => true
-          case (_, connector: Connector, South) if connector.connects(North) => true
-          case (_, connector: Connector, West) if connector.connects(East) => true
-          case _ => false
-      .map(_._1)
-
-      List(toStartAt.get)
-
-    valueAt(from) match
-      case Start => manageStart
-      case Connector(firstDir, secondDir) => List(from.move(firstDir), from.move(secondDir))
-      case _ => throw Exception("Not managed")
-
   lazy val loop: Loop =
     def findStart: Coords =
       val row = data.indexWhere(_.contains(Start))
@@ -129,6 +107,29 @@ case class Field(input: Seq[String]):
 
     Loop(populateLoop(findStart))
 
+  private def valueAt(position: Coords): Tile = data(position.row)(position.col)
+  
+  private def next(from: Coords): List[Coords] =
+    def manageStart: List[Coords] =
+      given Field = this
+      val toStartAt = Direction.values.map(currentDir => (from.move(currentDir), currentDir)).filter(_._1.isDefined).map:
+        (coords, direction) => (coords, valueAt(coords), direction)
+      .find:
+        case (_, connector: Connector, North) if connector.connects(South) => true
+        case (_, connector: Connector, East) if connector.connects(West) => true
+        case (_, connector: Connector, South) if connector.connects(North) => true
+        case (_, connector: Connector, West) if connector.connects(East) => true
+        case _ => false
+      .map(_._1)
+  
+      List(toStartAt.get)
+  
+    valueAt(from) match
+      case Start => manageStart
+      case Connector(firstDir, secondDir) => List(from.move(firstDir), from.move(secondDir))
+      case _ => throw Exception("Not managed")
+
+
 
 case class Loop(points: List[Coords]):
   lazy val size: Int = points.size / 2
@@ -149,10 +150,11 @@ case class Loop(points: List[Coords]):
 
   private def computeArea(edges: List[Coords]): Int =
     val nextOnes = edges.tail :+ edges.head
-    val result = edges.zip(nextOnes).foldLeft(0) { (acc, bothPoints) =>
-      val (x1, y1, x2, y2) = (bothPoints(0).row, bothPoints(0).col, bothPoints(1).row, bothPoints(1).col)
-      acc + (x2 * y1) - (x1 * y2)
-    }
+    val result = edges.zip(nextOnes).foldLeft(0):
+      case (acc, bothPoints) =>
+        val (x1, y1, x2, y2) = (bothPoints(0).row, bothPoints(0).col, bothPoints(1).row, bothPoints(1).col)
+        acc + (x2 * y1) - (x1 * y2)
+
     math.abs(result / 2)
 
   private def guessBordersEdges(pointBefore: Coords, currentPoint: Coords, pointAfter: Coords): Option[(Coords, Coords)] =
