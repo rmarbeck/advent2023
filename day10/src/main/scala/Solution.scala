@@ -3,10 +3,10 @@ import scala.annotation.tailrec
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val result = Field(inputLines).loopSize
+    val loop = Field(inputLines).loop
 
-    val result1 = s"$result"
-    val result2 = s""
+    val result1 = s"${loop.size}"
+    val result2 = s"${loop.area}"
 
     (s"${result1}", s"${result2}")
 
@@ -46,6 +46,10 @@ object Connector:
 
 export Connector.*
 
+enum RelativePosition:
+  case Above, Below, AtRight, AtLeft
+export RelativePosition.*
+
 case class Coords(row: Int, col: Int):
   lazy val north = this.copy(row = row - 1)
   lazy val south = this.copy(row = row + 1)
@@ -61,6 +65,14 @@ case class Coords(row: Int, col: Int):
 
   def isDefined(using field: Field): Boolean =
     row >= 0 && row <= field.height - 1  && col >= 0  && col <= field.width - 1
+
+  def comparedTo(other: Coords): RelativePosition =
+    other match
+      case value if value == north => Below
+      case value if value == south => Above
+      case value if value == east => AtLeft
+      case value if value == west => AtRight
+      case _ => throw Exception("Not supported")
 
 case class Field(input: Seq[String]):
   private val data: Array[Array[Tile]] =
@@ -95,11 +107,12 @@ case class Field(input: Seq[String]):
       case Connector(firstDir, secondDir) => List(from.move(firstDir), from.move(secondDir))
       case _ => throw Exception("Not managed")
 
-  lazy val loopSize: Int =
+  lazy val loop: Loop =
     def findStart: Coords =
       val row = data.indexWhere(_.contains(Start))
       val col = data(row).indexWhere(_ == Start)
       Coords(row, col)
+
     @tailrec
     def populateLoop(start: Coords, inLoop: List[Coords] = List()): List[Coords] =
       inLoop match
@@ -113,5 +126,43 @@ case class Field(input: Seq[String]):
                 case true => inLoop
                 case false => populateLoop(start, onlyOne +: inLoop)
             case _ => throw Exception(s"Not managed")
-    populateLoop(findStart).length / 2
 
+    Loop(populateLoop(findStart))
+
+
+case class Loop(points: List[Coords]):
+  lazy val size: Int = points.size / 2
+
+  lazy val area: Int =
+    val borders = (points ::: points.take(2)).sliding(3).flatMap:
+      case List(pointBefore, currentPoint, pointAfter) => guessBordersEdges(pointBefore, currentPoint, pointAfter)
+      case _ => throw Exception(s"Not possible")
+    .toList.unzip
+
+    val List(internalBorderArea, externalBorderArea) = borders.toList.map(computeArea).sorted
+
+    internalBorderArea
+
+  def computeArea(points: List[Coords]): Int =
+    val nextOnes = points.tail :+ points.head
+    val result = points.zip(nextOnes).foldLeft(0) { (acc, bothPoints) =>
+      val (x1, y1, x2, y2) = (bothPoints(0).row, bothPoints(0).col, bothPoints(1).row, bothPoints(1).col)
+      acc + (x2 * y1) - (x1 * y2)
+    }
+    math.abs(result / 2)
+
+  def guessBordersEdges(pointBefore: Coords, currentPoint: Coords, pointAfter: Coords): Option[(Coords, Coords)] =
+    (pointBefore comparedTo currentPoint, pointAfter comparedTo currentPoint) match
+      case (Above, Below) /* Going Down */ => None //(currentPoint.east, currentPoint)
+      case (Above, AtLeft) /* Turning From Up To Left */=> Some((currentPoint.south.east, currentPoint))
+      case (Above, AtRight) /* Turning From Up To Right */ => Some((currentPoint.east, currentPoint.south))
+      case (Below, Above) /* Going Up */ => None //(currentPoint, currentPoint.east)
+      case (Below, AtLeft) /* Turning From Down to Left */ => Some((currentPoint.south, currentPoint.east))
+      case (Below, AtRight) /* Turning From Down to Right */ => Some((currentPoint, currentPoint.south.east))
+      case (AtLeft, AtRight) /* Going Right */ => None //(currentPoint, currentPoint.south)
+      case (AtLeft, Above) /* Turning from Left to Up */ => Some((currentPoint, currentPoint.south.east))
+      case (AtLeft, Below) /* Turning from Left to Down */ => Some((currentPoint.east, currentPoint.south))
+      case (AtRight, AtLeft) /* Going Left */ => None// (currentPoint.south, currentPoint)
+      case (AtRight, Above) /* Turning from Right to Up */ => Some((currentPoint.south, currentPoint.east))
+      case (AtRight, Below) /* Turning from Right to Down */ => Some((currentPoint.south.east, currentPoint))
+      case value => throw Exception(s"Not possible : ${pointBefore}, ${currentPoint}, ${pointAfter}")
