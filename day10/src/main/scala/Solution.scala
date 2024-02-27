@@ -96,19 +96,20 @@ case class Field(input: Seq[String]):
       inLoop match
         case Nil => populateLoop(start, List(start))
         case head :: tail =>
-          val nextCoords: List[Coords] = next(head)
-          tail.headOption.map(previous => nextCoords.filterNot(_ == previous)).getOrElse(nextCoords) match
+          val nextCoords: List[Coords] = (next(head), tail.headOption) match
+            case (rawNext, Some(previousCoordsInLoop)) => rawNext.filterNot(_ == previousCoordsInLoop)
+            case (rawNext, None) => rawNext
+
+          nextCoords match
             case Nil => inLoop
-            case onlyOne :: Nil =>
-              onlyOne == start match
-                case true => inLoop
-                case false => populateLoop(start, onlyOne +: inLoop)
+            case onlyOne :: Nil if onlyOne == start => inLoop
+            case onlyOne :: Nil => populateLoop(start, onlyOne +: inLoop)
             case _ => throw Exception(s"Not managed")
 
     Loop(populateLoop(findStart))
 
   private def valueAt(position: Coords): Tile = data(position.row)(position.col)
-  
+
   private def next(from: Coords): List[Coords] =
     def manageStart: List[Coords] =
       given Field = this
@@ -121,9 +122,9 @@ case class Field(input: Seq[String]):
         case (_, connector: Connector, West) if connector.connects(East) => true
         case _ => false
       .map(_._1)
-  
+
       List(toStartAt.get)
-  
+
     valueAt(from) match
       case Start => manageStart
       case Connector(firstDir, secondDir) => List(from.move(firstDir), from.move(secondDir))
