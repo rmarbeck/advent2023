@@ -6,7 +6,7 @@ object Solution:
     val loop = Field(inputLines).loop
 
     val result1 = s"${loop.size}"
-    val result2 = s"${loop.area}"
+    val result2 = s"${loop.internalArea}"
 
     (s"${result1}", s"${result2}")
 
@@ -133,7 +133,11 @@ case class Field(input: Seq[String]):
 case class Loop(points: List[Coords]):
   lazy val size: Int = points.size / 2
 
-  lazy val area: Int =
+  lazy val internalArea: Int = area(0)
+
+  lazy val globalArea: Int = area(1)
+
+  private lazy val area: (Int, Int) =
     val borders = (points ::: points.take(2)).sliding(3).flatMap:
       case List(pointBefore, currentPoint, pointAfter) => guessBordersEdges(pointBefore, currentPoint, pointAfter)
       case _ => throw Exception(s"Not possible")
@@ -141,28 +145,20 @@ case class Loop(points: List[Coords]):
 
     val List(internalBorderArea, externalBorderArea) = borders.toList.map(computeArea).sorted
 
-    internalBorderArea
+    (internalBorderArea, externalBorderArea)
 
-  def computeArea(points: List[Coords]): Int =
-    val nextOnes = points.tail :+ points.head
-    val result = points.zip(nextOnes).foldLeft(0) { (acc, bothPoints) =>
+  private def computeArea(edges: List[Coords]): Int =
+    val nextOnes = edges.tail :+ edges.head
+    val result = edges.zip(nextOnes).foldLeft(0) { (acc, bothPoints) =>
       val (x1, y1, x2, y2) = (bothPoints(0).row, bothPoints(0).col, bothPoints(1).row, bothPoints(1).col)
       acc + (x2 * y1) - (x1 * y2)
     }
     math.abs(result / 2)
 
-  def guessBordersEdges(pointBefore: Coords, currentPoint: Coords, pointAfter: Coords): Option[(Coords, Coords)] =
+  private def guessBordersEdges(pointBefore: Coords, currentPoint: Coords, pointAfter: Coords): Option[(Coords, Coords)] =
     (pointBefore comparedTo currentPoint, pointAfter comparedTo currentPoint) match
-      case (Above, Below) /* Going Down */ => None //(currentPoint.east, currentPoint)
-      case (Above, AtLeft) /* Turning From Up To Left */=> Some((currentPoint.south.east, currentPoint))
-      case (Above, AtRight) /* Turning From Up To Right */ => Some((currentPoint.east, currentPoint.south))
-      case (Below, Above) /* Going Up */ => None //(currentPoint, currentPoint.east)
-      case (Below, AtLeft) /* Turning From Down to Left */ => Some((currentPoint.south, currentPoint.east))
-      case (Below, AtRight) /* Turning From Down to Right */ => Some((currentPoint, currentPoint.south.east))
-      case (AtLeft, AtRight) /* Going Right */ => None //(currentPoint, currentPoint.south)
-      case (AtLeft, Above) /* Turning from Left to Up */ => Some((currentPoint, currentPoint.south.east))
-      case (AtLeft, Below) /* Turning from Left to Down */ => Some((currentPoint.east, currentPoint.south))
-      case (AtRight, AtLeft) /* Going Left */ => None// (currentPoint.south, currentPoint)
-      case (AtRight, Above) /* Turning from Right to Up */ => Some((currentPoint.south, currentPoint.east))
-      case (AtRight, Below) /* Turning from Right to Down */ => Some((currentPoint.south.east, currentPoint))
-      case value => throw Exception(s"Not possible : ${pointBefore}, ${currentPoint}, ${pointAfter}")
+      case (Above, AtLeft) | (AtRight, Below) => Some((currentPoint.south.east, currentPoint))
+      case (Above, AtRight) | (AtLeft, Below) => Some((currentPoint.east, currentPoint.south))
+      case (Below, AtLeft) | (AtRight, Above) => Some((currentPoint.south, currentPoint.east))
+      case (Below, AtRight) | (AtLeft, Above) => Some((currentPoint, currentPoint.south.east))
+      case _ => None
