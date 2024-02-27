@@ -39,7 +39,6 @@ object Solver:
     val maze1 = Maze(lines)
 
     //println(maze1)
-    println("**************")
 
     val maze = lines.map(_.toCharArray).toArray
 
@@ -53,14 +52,15 @@ object Solver:
 
     /*println(s" path2 ----------> ${path2.getArea} and length = ${path2.length}")
     path2.getBorders.map(println)*/
-    println(s" ----------> ${path.getArea} and length = ${path.length} => ${path.getArea - path.length}")
+    val pathArea = math.abs(path.getArea)
+    val part2Result = math.min(pathArea, math.abs(pathArea - path.length))
     //path.points.map(println)
 
     //println(s"maze size : ${maze(0).length} and ${maze.length}")
 
     val pipes = Seq("|", "-", "7", "F", "L", "J", "S", ".")
 
-    val (result1, result2) = (s"${path.length/2}", s"${path.getArea - path.length}")
+    val (result1, result2) = (s"${path.length/2}", s"${part2Result}")
 
     (s"${result1}", s"${result2}")
 
