@@ -38,12 +38,10 @@ def countsWithHash(panel: Panel): LazyList[(Int, Long)] =
   afterOneCycle.countWithHash #:: countsWithHash(afterOneCycle)
 
 private case class Panel(rocks: Array[Array[Char]]):
-  private lazy val northOriented = rocks.transpose
-
   private lazy val height = rocks.length
   private lazy val width = rocks(0).length
 
-  lazy val count = rocks.map(countInPlace).sum
+  private lazy val count = rocks.map(countInPlace).sum
 
   private lazy val rotate = Panel {
     Array.tabulate(height, width):
@@ -56,7 +54,7 @@ private case class Panel(rocks: Array[Array[Char]]):
     (1 to 4).foldLeft(this):
       (acc, _) => acc.reorganized.rotate
 
-  lazy val countHash: Long =
+  private lazy val countHash: Long =
     (for
       row <- 0 until height
       col <- 0 until width
@@ -65,15 +63,15 @@ private case class Panel(rocks: Array[Array[Char]]):
       (row+1)*(col+1)
     ).sum
 
-  lazy val countWithHash = (count, countHash)
+  lazy val countWithHash: (Int, Long) = (count, countHash)
 
-  override def toString: String = northOriented.map(_.mkString).mkString("\n")
+  override lazy val toString: String = rocks.transpose.map(_.mkString).mkString("\n")
 
 object Panel:
   def fromUnTransposed(unTransposedRocks: Array[Array[Char]]): Panel = Panel(unTransposedRocks.transpose)
 
 def reorganize(rocks: Array[Char]): Array[Char] =
-  val reorganized = Array.tabulate(rocks.size)(rocks(_))
+  val reorganized = Array.tabulate(rocks.length)(rocks(_))
   var counter = 0
   for
     (currentChar, index) <- rocks.zipWithIndex
@@ -91,7 +89,7 @@ def reorganize(rocks: Array[Char]): Array[Char] =
   reorganized
 
 def countInPlace(rocks: Array[Char]): Int =
-  val size = rocks.size
+  val size = rocks.length
   rocks.zipWithIndex.filter(_._1 == 'O').map(size - _._2).sum
 
 /**
@@ -100,7 +98,7 @@ def countInPlace(rocks: Array[Char]): Int =
  *
  */
 def countMovingUp(rocks: Array[Char]): Int =
-  val size = rocks.size
+  val size = rocks.length
   countMovingUp(rocks.toList, size, size, 0)
 
 @tailrec
