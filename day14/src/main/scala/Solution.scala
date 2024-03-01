@@ -25,7 +25,7 @@ end Solution
 @tailrec
 def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, Long)] = Nil): (List[Int], Int) =
   def cycleSize: Option[Int] =
-    currentList.indexOf(provider.head) match
+    currentList.map(_._2).indexOf(provider.head._2) match
       case -1 => None
       case value => Some(value + 1)
 
@@ -54,6 +54,8 @@ private case class Panel(rocks: Array[Array[Char]]):
     (1 to 4).foldLeft(this):
       (acc, _) => acc.reorganized.rotate
 
+  private lazy val countHash2: Long = rocks.map(_.mkString).mkString.hashCode
+
   private lazy val countHash: Long =
     (for
       row <- 0 until height
@@ -63,7 +65,7 @@ private case class Panel(rocks: Array[Array[Char]]):
       (math.pow(2, row)*math.pow(2, col)).toLong
     ).sum
 
-  lazy val countWithHash: (Int, Long) = (count, countHash)
+  lazy val countWithHash: (Int, Long) = (count, countHash2)
 
   override lazy val toString: String = rocks.transpose.map(_.mkString).mkString("\n")
 
