@@ -25,7 +25,7 @@ end Solution
 @tailrec
 def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, Long)] = Nil): (List[Int], Int) =
   def cycleSize: Option[Int] =
-    currentList.map(_._2).indexOf(provider.head._2) match
+    currentList.indexOf(provider.head) match
       case -1 => None
       case value => Some(value + 1)
 
@@ -60,8 +60,7 @@ private case class Panel(rocks: Array[Array[Char]]):
       col <- 0 until width
       if rocks(row)(col) == 'O'
     yield
-      // could be more exclusive
-      (row+1)*(col+height+1)
+      (math.pow(2, row)*math.pow(2, col)).toLong
     ).sum
 
   lazy val countWithHash: (Int, Long) = (count, countHash)
