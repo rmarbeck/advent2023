@@ -60,7 +60,8 @@ private case class Panel(rocks: Array[Array[Char]]):
       col <- 0 until width
       if rocks(row)(col) == 'O'
     yield
-      (row+1)*(col+1)
+      // could be more exclusive
+      (row+1)*(col+height+1)
     ).sum
 
   lazy val countWithHash: (Int, Long) = (count, countHash)
