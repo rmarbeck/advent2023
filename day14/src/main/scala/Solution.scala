@@ -9,10 +9,10 @@ object Solution:
     val values = inputLines.map(_.toCharArray).toArray
     val resultPart1 = values.transpose.map(countMovingUp).sum
 
-    val panel = Panel(values)
+    val panel = Panel.fromUnTransposed(values)
 
-    val (cycle, drift) = findCycle(counts(panel))
-
+    val (cycle, drift) = findCycleWithHash(countsWithHash(panel))
+    
     val resultPart2 = cycle((numberOfCycles - drift) % cycle.size - 1)
 
     val result1 = s"$resultPart1"
@@ -38,29 +38,56 @@ def findCycle(provider: LazyList[Int], currentList: List[Int] = Nil): (List[Int]
     case Some(value) => (currentList.take(value).reverse, currentList.size - value)
     case None => findCycle(provider.tail, provider.head +: currentList)
 
+@tailrec
+def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, Long)] = Nil): (List[Int], Int) =
+  def cycleSize: Option[Int] =
+    currentList.map(_._2).indexOf(provider.head._2) match
+      case -1 => None
+      case value => Some(value + 1)
+
+  cycleSize match
+    case Some(value) => (currentList.map(_._1).take(value).reverse, currentList.size)
+    case None => findCycleWithHash(provider.tail, provider.head +: currentList)
 
 def counts(panel: Panel): LazyList[Int] =
   val afterOneCycle = panel.turn4TimesTilting
   afterOneCycle.count #:: counts(afterOneCycle)
 
-case class Panel(rocks: Array[Array[Char]]):
+def countsWithHash(panel: Panel): LazyList[(Int, Long)] =
+  val afterOneCycle = panel.turn4TimesTilting
+  afterOneCycle.countWithHash #:: countsWithHash(afterOneCycle)
+
+private case class Panel(rocks: Array[Array[Char]]):
   private lazy val northOriented = rocks.transpose
 
-  lazy val count = northOriented.map(countInPlace).sum
+  lazy val height = rocks.length
+  lazy val width = rocks(0).length
 
-  private lazy val turnLeft = Panel {
-    val height = rocks.length
-    Array.tabulate(height, rocks(0).length):
-      (row, col) => rocks(height - col - 1)(row)
+  lazy val count = rocks.map(countInPlace).sum
+
+  private lazy val rotate = Panel {
+    Array.tabulate(height, width):
+      (row, col) => rocks(col)(width - row - 1)
   }
 
-  private lazy val reorganized: Panel = Panel(rocks.transpose.map(reorganize).transpose)
+  private lazy val reorganized: Panel = Panel(rocks.map(reorganize))
 
   def turn4TimesTilting: Panel =
     (1 to 4).foldLeft(this):
-      (acc, _) => acc.reorganized.turnLeft
+      (acc, _) => acc.reorganized.rotate
 
-  override def toString: String = rocks.map(_.mkString).mkString("\n")
+  lazy val countHash: Long =
+    (for
+      row <- 0 until height
+      col <- 0 until width
+      if rocks(row)(col) == 'O'
+    yield
+      (row+1)*(col+1)
+    ).sum
+
+  lazy val countWithHash = (count, countHash)
+
+  override def toString: String = northOriented.map(_.mkString).mkString("\n")
 
 object Panel:
   def fromUnTransposed(unTransposedRocks: Array[Array[Char]]): Panel = Panel(unTransposedRocks.transpose)
