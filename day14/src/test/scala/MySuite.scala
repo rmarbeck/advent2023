@@ -4,9 +4,9 @@ class MySuite extends munit.FunSuite:
   test("Day14 : main test on final data"):
     val (score1, score2) = Solver.solve
     assertEquals(score1, "105982")
-    assertEquals(score2, "")
+    assertEquals(score2, "85175")
 
   test("Day14 : main test on initial data"):
     val (score1, score2) = Solver.solveTest
     assertEquals(score1, "136")
-    assertEquals(score2, "")
+    assertEquals(score2, "64")
