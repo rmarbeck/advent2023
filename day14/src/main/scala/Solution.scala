@@ -12,7 +12,7 @@ object Solution:
     val panel = Panel.fromUnTransposed(values)
 
     val (cycle, drift) = findCycleWithHash(countsWithHash(panel))
-    
+
     val resultPart2 = cycle((numberOfCycles - drift) % cycle.size - 1)
 
     val result1 = s"$resultPart1"
@@ -23,22 +23,6 @@ object Solution:
 end Solution
 
 @tailrec
-def findCycle(provider: LazyList[Int], currentList: List[Int] = Nil): (List[Int], Int) =
-  val minimumSize = 5
-  def cycleSize: Option[Int] =
-    currentList.size match
-      case value if value < minimumSize * 2 => None
-      case sizeOfList =>
-        (sizeOfList / 2 until minimumSize by -1).find:
-          slizeSize =>
-            val (head, tail) = currentList.splitAt(slizeSize)
-            tail.indexOfSlice(head) == 0
-
-  cycleSize match
-    case Some(value) => (currentList.take(value).reverse, currentList.size - value)
-    case None => findCycle(provider.tail, provider.head +: currentList)
-
-@tailrec
 def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, Long)] = Nil): (List[Int], Int) =
   def cycleSize: Option[Int] =
     currentList.map(_._2).indexOf(provider.head._2) match
@@ -46,12 +30,8 @@ def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, L
       case value => Some(value + 1)
 
   cycleSize match
-    case Some(value) => (currentList.map(_._1).take(value).reverse, currentList.size)
+    case Some(value) => (currentList.take(value).reverse.map(_._1), currentList.size)
     case None => findCycleWithHash(provider.tail, provider.head +: currentList)
-
-def counts(panel: Panel): LazyList[Int] =
-  val afterOneCycle = panel.turn4TimesTilting
-  afterOneCycle.count #:: counts(afterOneCycle)
 
 def countsWithHash(panel: Panel): LazyList[(Int, Long)] =
   val afterOneCycle = panel.turn4TimesTilting
@@ -60,8 +40,8 @@ def countsWithHash(panel: Panel): LazyList[(Int, Long)] =
 private case class Panel(rocks: Array[Array[Char]]):
   private lazy val northOriented = rocks.transpose
 
-  lazy val height = rocks.length
-  lazy val width = rocks(0).length
+  private lazy val height = rocks.length
+  private lazy val width = rocks(0).length
 
   lazy val count = rocks.map(countInPlace).sum
 
@@ -114,6 +94,11 @@ def countInPlace(rocks: Array[Char]): Int =
   val size = rocks.size
   rocks.zipWithIndex.filter(_._1 == 'O').map(size - _._2).sum
 
+/**
+ *
+ * For Part 1 Only
+ *
+ */
 def countMovingUp(rocks: Array[Char]): Int =
   val size = rocks.size
   countMovingUp(rocks.toList, size, size, 0)
