@@ -26,7 +26,8 @@ class BoxHolder(size: Int):
     boxes(newLens.hashed) = boxes(newLens.hashed).manage(newLens)
     this
 
-case class Lens(label: String, value: Option[Int])
+case class Lens(label: String, value: Option[Int]):
+  def hashed: Int = hash(label)
 
 object Lens:
   def from(raw: String): Lens =
@@ -34,9 +35,6 @@ object Lens:
       case s"$label-" => Lens(label, None)
       case s"$label=$value" => Lens(label, Some(value.toInt))
       case _ => throw Exception("Not managed")
-
-extension (l: Lens)
-  def hashed: Int = hash(l.label)
 
 case class Box(id: Int, lenses: Seq[Lens] = Seq()):
   lazy val focusingPower = (id + 1) * lenses.zipWithIndex.map((lens, index) => lens.value.getOrElse(0) * (index + 1)).sum
