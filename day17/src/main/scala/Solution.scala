@@ -1,5 +1,8 @@
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+
 val maxStepsInOneDirectionPart1 = 3
-val minStepsInOneDirectionPart1 = 0
+val minStepsInOneDirectionPart1 = 1
 val maxStepsInOneDirectionPart2 = 10
 val minStepsInOneDirectionPart2 = 4
 object Solution:
@@ -7,6 +10,8 @@ object Solution:
     val (height: Int, width: Int) = (inputLines.length, inputLines(0).length)
 
     given heatMap: HeatMap = HeatMap(inputLines)
+
+    given Valuer = heatMap.getHeat
 
     val summitsPart1 = heatMap.getSummitsPart1
 
@@ -21,9 +26,8 @@ object Solution:
       case _ => false
 
     val before = System.currentTimeMillis()
-    val resultPart1 = Dijkstra.solveOptimized(graphPart1, startPart1, endPart1, true).drop(1).map(_.value).sum
-
-    println(s"Done in ${System.currentTimeMillis() - before} ms")
+    val resultPart1Future: Future[List[Summit]] = Future:
+      Dijkstra.solveOptimized(graphPart1, startPart1, endPart1, true)
 
     val summitsPart2 = heatMap.getSummitsPart2
     val startPart2 = summitsPart2.find:
@@ -36,9 +40,21 @@ object Solution:
       case _ => false
 
     val graphPart2 = GraphFromArray(summitsPart2)(nextPart2)
-    val solutions = Dijkstra.solveOptimized(graphPart2, startPart2, endPart2, false)
 
-    val resultPart2 = solutions.drop(1).map(_.value).sum
+    val resultPart2Future: Future[List[Summit]] = Future:
+      Dijkstra.solveOptimized(graphPart2, startPart2, endPart2, true)
+
+    import concurrent.duration.DurationInt
+    val finalResults: List[Int] = Await.result(
+      for
+        result1 <- resultPart1Future
+        result2 <- resultPart2Future
+      yield
+        (result1, result2).toList.map(_.sliding(2).flatMap(summits => summits(1).to(summits(0))).sum)
+    , 4.minutes)
+
+    val resultPart1 = finalResults(0)
+    val resultPart2 = finalResults(1)
 
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
@@ -51,22 +67,25 @@ object Solution:
 
     Direction.values.toList.filterNot(_ == summit.lastDir.opposite).flatMap:
       currentDir =>
+        val toMoveTo = summit.lastDir == currentDir match
+          case true => 1
+          case false => min
         val (nextRow, nextCol) = currentDir match
-          case Left2Right => (currentRow, currentCol + 1)
-          case Right2Left => (currentRow, currentCol - 1)
-          case Up2Down => (currentRow + 1, currentCol)
-          case Down2Up => (currentRow - 1, currentCol)
+          case Left2Right => (currentRow, currentCol + toMoveTo)
+          case Right2Left => (currentRow, currentCol - toMoveTo)
+          case Up2Down => (currentRow + toMoveTo, currentCol)
+          case Down2Up => (currentRow - toMoveTo, currentCol)
 
         (heatMap.isDefinedAt(nextRow, nextCol), summit.lastDir == currentDir) match
           case (false, _) => None
           case (true, true) =>
             summit.lastDirCounter match
               case value if value == max => None
-              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDirCounter = value + 1))
+              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDirCounter = value + toMoveTo))
           case (true, false) =>
             summit.lastDirCounter match
               case value if value < min => None
-              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDir = currentDir, lastDirCounter = 1))
+              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDir = currentDir, lastDirCounter = toMoveTo))
 
   private def nextPart1(summit: Summit)(using heatMap: HeatMap): List[Summit] = next(summit, minStepsInOneDirectionPart1, maxStepsInOneDirectionPart1)
 
