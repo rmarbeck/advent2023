@@ -11,15 +11,15 @@ object Solution:
 
       val graphPart1 = GraphFromArray(summits)(nextPart1)
       val startPart1 = summits.find:
-        case Summit(0, 0, _, _, 0) => true
+        case Summit(0, 0, _, _, 0, _) => true
         case _ => false
       .get
 
       val endPart1 = summits.toList.filter:
-        case Summit(row, col, _, Up2Down | Left2Right, _) if row == height - 1 && col == width - 1 => true
+        case Summit(row, col, _, Up2Down | Left2Right, _, _) if row == height - 1 && col == width - 1 => true
         case _ => false
 
-      Dijkstra.solve(graphPart1, startPart1, endPart1).drop(1).map(_.value).sum
+      Dijkstra.solveOptimized(graphPart1, startPart1, endPart1).drop(1).map(_.value).sum
     }
 
     val resultPart2 = {
@@ -27,16 +27,17 @@ object Solution:
 
       val summitsPart2 = heatMapPart2.getSummitsPart2
       val startPart2 = summitsPart2.find:
-        case Summit(0, 0, _, _, 0) => true
+        case Summit(0, 0, _, _, 0, _) => true
         case _ => false
       .get
 
       val endPart2 = summitsPart2.toList.filter:
-        case Summit(row, col, _, Up2Down | Left2Right, lastDirCounter) if row == height - 1 && col == width - 1 && lastDirCounter >= minStepsInOneDirectionPart2 => true
+        case Summit(row, col, _, Up2Down | Left2Right, lastDirCounter, _) if row == height - 1 && col == width - 1 && lastDirCounter >= minStepsInOneDirectionPart2 => true
         case _ => false
 
       val graphPart2 = GraphFromArray(summitsPart2)(nextPart2)
-      Dijkstra.solve(graphPart2, startPart2, endPart2).drop(1).map(_.value).sum
+      val solutions = Dijkstra.solveOptimized(graphPart2, startPart2, endPart2)
+      solutions.drop(1).map(_.value).sum
     }
 
     val result1 = s"$resultPart1"
@@ -112,10 +113,10 @@ case class HeatMap(inputLines: Seq[String]):
     Direction.values.toList.flatMap:
       currentDir =>
         (0 to maxStepsInOneDirection).map:
-          step => Summit(row, col, value, currentDir, step)
+          step => Summit(row, col, value, currentDir, step, height)
 
   def allSummitsFromPart2(row: Int, col: Int, value: Int): List[Summit] =
     Direction.values.toList.flatMap:
       currentDir =>
         (0 to maxStepsInOneDirectionPart2).map:
-          step => Summit(row, col, value, currentDir, step)
+          step => Summit(row, col, value, currentDir, step, height)
