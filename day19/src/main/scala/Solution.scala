@@ -53,8 +53,10 @@ object Part:
       case _ => throw Exception("Not supported")
   def fromString(raw: String): Part =
     raw match
-      case s"{x=$x,m=$m,a=$a,s=$s}" if List(x, m, a, s).forall(_.toIntOption.isDefined) => from(List(x, m, a, s).map(_.toInt))
-      case s"{x=$x,m=$m,a=$a,s=$s}" => throw Exception("At least one data is not an Int")
+      case s"{x=$x,m=$m,a=$a,s=$s}" =>
+        List(x, m, a, s).flatMap(_.toIntOption) match
+          case list if list.length == 4 => from(list)
+          case _ => throw Exception("At least one data is not an Int")
       case _ => throw Exception("Not supported format")
 
 enum Operation:
