@@ -47,7 +47,6 @@ case class Part(x: Int, m: Int, a: Int, s: Int):
       case 'm' => m
       case 'a' => a
       case 's' => s
-      case _ => throw Exception("Impossible")
 
 object Part:
   private def from(asList: List[Int]): Part =
@@ -92,7 +91,6 @@ case class PartRange(x: (Int, Int), m: (Int, Int), a: (Int, Int), s: (Int, Int))
       case 'm' => m
       case 'a' => a
       case 's' => s
-      case _ => throw Exception("Impossible")
 
 object PartRange:
   private def size(range: (Int, Int)): Long = range(1) - range(0) + 1
@@ -115,31 +113,27 @@ enum Operation:
 export Operation.*
 
 case class RuleHolder(name: String, rules: List[Rule], default: Alternative):
-  private def manage(alternative: Alternative, matchingRange: PartRange)(using Rules): List[PartRange] =
-    alternative match
-      case Right(true) => List(matchingRange)
-      case Left(ruleHolderName) => summon[Rules](ruleHolderName).test(matchingRange)
-      case _ => Nil
-
+  def nextRule: RuleHolder = this.copy(rules = rules.tail)
   def test(partRange: PartRange)(using Rules): List[PartRange] =
+    def manage(alternative: Alternative, matchingRange: PartRange)(using Rules): List[PartRange] =
+      alternative match
+        case Right(true) => List(matchingRange)
+        case Left(ruleHolderName) => summon[Rules](ruleHolderName).test(matchingRange)
+        case _ => Nil
     rules match
       case Nil => manage(default, partRange)
       case head :: tail =>
-        val (matchingPart, unMatchingPart) = head.test(partRange)
-        val resultFromUnMatching = unMatchingPart.map(this.copy(rules = tail).test(_)).getOrElse(Nil)
-
-        val resultFromMatching =
-          matchingPart match
-            case Some((matchingRange, alternative)) => manage(alternative, matchingRange)
-            case _ => Nil
-
-        resultFromUnMatching ::: resultFromMatching
+        val parts = head.test(partRange).toList
+        parts.foldLeft(Nil: List[PartRange]):
+          case (acc, Some(range : PartRange)) => nextRule.test(range) ::: acc
+          case (acc, Some((matchingRange: PartRange, alternative: Alternative@unchecked))) => manage(alternative, matchingRange) ::: acc
+          case (acc, _) => acc
 
   def test(part: Part): Alternative =
     rules match
       case Nil => default
       case head :: tail => head.test(part) match
-        case None => this.copy(rules = tail).test(part)
+        case None => nextRule.test(part)
         case Some(alternative) => alternative
 
 object RuleHolder:
@@ -163,14 +157,14 @@ case class Rule(key: Char, op: Operation, limit: Int, destination: Alternative):
   def test(partRange: PartRange): (Option[(PartRange, Alternative)], Option[PartRange]) =
     val (minimum ,maximum) = partRange.byKey(key)
     (minimum, maximum, op) match
-      case (min, max, Greater) if max <= limit => (None, Some(partRange))
-      case (min, max, Lower) if min >= limit => (None, Some(partRange))
-      case (min, max, Greater) if min > limit => (Some((partRange, destination)), None)
-      case (min, max, Lower) if max < limit => (Some((partRange, destination)), None)
-      case (min, max, Greater) =>
+      case (_, max, Greater) if max <= limit => (None, Some(partRange))
+      case (min, _, Lower) if min >= limit => (None, Some(partRange))
+      case (min, _, Greater) if min > limit => (Some((partRange, destination)), None)
+      case (_, max, Lower) if max < limit => (Some((partRange, destination)), None)
+      case (_, _, Greater) =>
         val List(rangeBeforeLimit, rangeAfterLimit) = partRange.splitInclusive(limit, key)
         (Some((rangeAfterLimit, destination)), Some(rangeBeforeLimit))
-      case (min, max, Lower) =>
+      case (_, _, Lower) =>
         val List(rangeBeforeLimit, rangeAfterLimit) = partRange.splitExclusive(limit, key)
         (Some((rangeBeforeLimit, destination)), Some(rangeAfterLimit))
 
@@ -179,15 +173,7 @@ case class Rule(key: Char, op: Operation, limit: Int, destination: Alternative):
       case value if op.test(value, limit) => Some(destination)
       case _ => None
 
-  override def toString: String = s"$key $op $limit => ${destination.asString}"
-
-extension (alternative: Either[RuleHolderName, Boolean])
-  private def acceptOrReject(boolean: Boolean): String =
-    boolean match
-      case true => "Accept"
-      case false => "Reject"
-
-  def asString: String = alternative.fold(name => s"[${name}]", acceptOrReject)
+  override def toString: String = s"$key $op $limit => $destination"
 
 extension (s: String)
   def asDestination: Alternative =
