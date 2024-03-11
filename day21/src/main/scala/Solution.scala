@@ -1,23 +1,21 @@
 import scala.annotation.tailrec
 
+val cacheActive = false
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
     given garden: Garden = Garden.from(inputLines)
 
-    given igarden: IGarden = IGarden(garden)
+    given IGarden = IGarden(garden)
 
     val resultPart1 = count(List(garden.startingPosition), 64)
 
-    val size = igarden.garden.height
-    val halfSize = size / 2
-    val steps = 26501365
+    val steps: Long = 26_501_365
 
-    val stepsToWalk: Long = ((steps - halfSize) / size) - 1
-
-    val resultP2 = Suite.guessTerms(List(halfSize - 1, size + halfSize - 1, 2*size + halfSize - 1)).calc(stepsToWalk)
+    val resultPart2 = Suite.calc(steps)
 
     val result1 = s"$resultPart1"
-    val result2 = s"$resultP2"
+    val result2 = s"$resultPart2"
 
     (s"${result1}", s"${result2}")
 
@@ -50,22 +48,19 @@ def count(positions: List[Position], remainingSteps: Int)(using Garden): Int =
     case 0 => positions.length
     case steps => count(positions.flatMap(_.next).distinct, remainingSteps - 1)
 
-
-/*@tailrec
-def icount2(positions: List[Position], remainingSteps: Int)(using IGarden): Int =
-  remainingSteps match
-    case 0 => positions.length
-    case steps => icount2(positions.flatMap(_.nextInfinite).distinct, remainingSteps - 1)
-
-def icount(positions: List[Position])(using IGarden): LazyList[Int] =
-  val current = positions.length
-  current #:: icount(positions.flatMap(_.nextInfinite).distinct)*/
-
 case class Suite(u0: Long, u1: Long, factor: Long):
-  def calc(n:Long) = (n+1)*u1 - n*u0 + (n*(n+1)/2)*factor
-
+  private def calc(n:Long): Long = n*u1 - (n - 1) *u0 + (n*(n-1)/2)*factor
 
 object Suite:
+  def calc(steps: Long)(using IGarden): Long =
+    val sizeOfInitialGarden = summon[IGarden].garden.height
+    val halfSize = sizeOfInitialGarden / 2
+    val stepsToWalk: Long = (steps - halfSize) / sizeOfInitialGarden
+    val firstRound = sizeOfInitialGarden + halfSize
+    val secondRound = 2 * sizeOfInitialGarden + halfSize
+
+    guessTerms(List(halfSize, firstRound, secondRound)).calc(stepsToWalk)
+
   def guessTerms(terms: List[Int])(using IGarden): Suite =
     val List(u2, u1, u0) = summon[IGarden].guessTerms(terms)
     val factor = u2 - 2*u1 + u0
@@ -92,8 +87,8 @@ object Garden:
 
 case class IGarden(garden: Garden):
   import scala.collection.mutable.Map
-  val cache: Map[(Int, Int), List[Position]] = Map()
-  lazy val startingPosition: Position = garden.startingPosition
+  private val cache: Map[(Int, Int), List[Position]] = Map()
+  private lazy val startingPosition: Position = garden.startingPosition
   private def slide(position: Position): Position =
     def signedModulo(value: Int, modulo: Int) =
       value match
@@ -101,12 +96,15 @@ case class IGarden(garden: Garden):
         case current => (value % modulo)
     Position(signedModulo(position.row, garden.height), signedModulo(position.col, garden.width))
 
-  def nextInfinite(position: Position): List[Position] =
-    cache.getOrElseUpdate((position.row, position.col), List(position.north, position.south, position.east, position.west).filterNot(isARock))
+  private def nextInfinite(position: Position): List[Position] =
+    cacheActive match
+      case true => cache.getOrElseUpdate((position.row, position.col), List(position.north, position.south, position.east, position.west).filterNot(isARock))
+      case false => List(position.north, position.south, position.east, position.west).filterNot(isARock)
+
 
   def guessTerms(terms: List[Int]): List[Long] =
     @tailrec
-    def count(positions: Set[Position], toFind: List[Int], results: List[Long] = Nil, counter: Int = 0): List[Long] =
+    def count(positions: Set[Position], toFind: List[Int], results: List[Long] = Nil, counter: Int = 1): List[Long] =
       toFind match
         case Nil => results
         case head :: tail =>
@@ -117,4 +115,4 @@ case class IGarden(garden: Garden):
 
     count(Set(this.startingPosition), terms)
 
-  def isARock(position: Position): Boolean = garden.isARock(slide(position))
+  private def isARock(position: Position): Boolean = garden.isARock(slide(position))
