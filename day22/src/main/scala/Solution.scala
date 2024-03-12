@@ -1,4 +1,6 @@
 import scala.annotation.tailrec
+import scala.collection.parallel.*
+import collection.parallel.CollectionConverters.seqIsParallelizable
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -6,12 +8,12 @@ object Solution:
     val bricks = inputLines.map(Brick.from)
 
     val container = Container()
-    bricks.foreach(container.dropBrick)
+    bricks.sortBy(_.lowestCube).foreach(container.dropBrick)
 
     //container.bricks.foreach(println)
     println("Ready")
 
-    val resultPart1 = container.bricks.count:
+    val resultPart1 = container.bricks.par.count:
       current =>
         val others = container.bricks.filterNot(_ == current)
         val bricksSupported = current.listSupported(others)
