@@ -11,11 +11,9 @@ object Solution:
           crossRoads.flatMap:
             nextCrossRoad =>
               nextCrossRoad.from.find(_._1.position == currentCrossRoad.position).map:
-                (_ , distance) => (nextCrossRoad, -distance)
+                (_ , distance) => (nextCrossRoad, distance)
 
         Summit(Summit.toName(currentCrossRoad), nextSummits)
-
-    summits.foreach(println)
 
     given summitsHolder: SummitsHolder = SummitsHolder(summits)
 
@@ -25,9 +23,19 @@ object Solution:
 
     val result = Dijkstra.solve(graph, summitsHolder.byName("0-1"), List(summitsHolder.byName(endName)))*/
 
-    val result = topologicalSort(summitsHolder.byName("0-1"))
+    val result = topologicalSort(summitsHolder.byName("0-1")).values
 
-    val result1 = s"$result"
+    val resultWithData = result.zipWithIndex.map:
+      case (currentSummit, 0) =>
+        WithData[Summit](currentSummit, 0)
+      case (currentSummit, _) =>
+        WithData[Summit](currentSummit)
+
+    val tempo = count(resultWithData)
+    println(resultWithData)
+
+
+    val result1 = s"${tempo}"
     val result2 = s""
 
     (s"${result1}", s"${result2}")
@@ -52,8 +60,8 @@ export TypeOfLocation.*
 type DistanceToCrossRoad = (CrossRoad, Int)
 
 case class Summit(name: String, nexts: List[DistanceToCrossRoad]):
-  //override def toString: String = s"[$name]"
-  override def toString: String = s"[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1.position} (${current._2})").mkString}"
+  override def toString: String = s"[$name]"
+  //override def toString: String = s"[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1.position} (${current._2})").mkString}"
 
 object Summit:
   def toName(crossRoad: CrossRoad): String = toName(crossRoad.position)
@@ -79,7 +87,7 @@ def findNext(crossRoads: List[CrossRoad], nextPosition: Option[Position], curren
       nextPosition match
         case None =>
           nextPositionsAuthorized(head.position) match
-            case Nil => findNext(tail, None, 0, alreadyExploredPositions, head +: alreadyExploredCrossRoads)
+            case Nil => findNext(tail, None, 1, alreadyExploredPositions, head +: alreadyExploredCrossRoads)
             case newNextPosition :: _ => findNext(crossRoads, Some(newNextPosition), 0, alreadyExploredPositions, alreadyExploredCrossRoads)
         case Some(nextPos) =>
           forest.isACrossRoad(nextPos) match
@@ -95,7 +103,7 @@ def findNext(crossRoads: List[CrossRoad], nextPosition: Option[Position], curren
                         (crossRoadsWithoutHead, head +: alreadyExploredCrossRoads, newNextPosition)
                       case possibleNexts => (crossRoads.filterNot(_ == previouslyFound) :+ newCrossRoad, alreadyExploredCrossRoads, possibleNexts.headOption)
 
-                  findNext(newCrossRoads, newNextPosition, 0, alreadyExploredPositions, newAlreadyExploredCrossRoads)
+                  findNext(newCrossRoads, newNextPosition, 1, alreadyExploredPositions, newAlreadyExploredCrossRoads)
 
                 case None =>
                   val newCrossRoad = CrossRoad(nextPos, List((head, currentSteps)))
@@ -107,13 +115,13 @@ def findNext(crossRoads: List[CrossRoad], nextPosition: Option[Position], curren
                         (crossRoadsWithoutHead, head +: alreadyExploredCrossRoads, newNextPosition)
                       case possibleNexts => (crossRoads :+ newCrossRoad, alreadyExploredCrossRoads, possibleNexts.headOption)
 
-                  findNext(newCrossRoads, newNextPosition, 0, alreadyExploredPositions, newAlreadyExploredCrossRoads)
+                  findNext(newCrossRoads, newNextPosition, 1, alreadyExploredPositions, newAlreadyExploredCrossRoads)
             case false => findNext(crossRoads, nextPositionsAuthorized(nextPos).headOption, currentSteps+1, nextPos +: alreadyExploredPositions, alreadyExploredCrossRoads)
 
 def findCrossRoads(using forest: Forest): List[CrossRoad] =
   val start = Position(0,1)
   val initialCrossRoad = CrossRoad(start)
-  findNext(List(initialCrossRoad), Some(start), 0, Nil, Nil)
+  findNext(List(initialCrossRoad), Some(start), 1, Nil, Nil)
 
 case class Forest(places: Array[Array[TypeOfLocation]]):
   lazy val height = places.length
