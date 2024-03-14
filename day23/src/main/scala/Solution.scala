@@ -32,7 +32,27 @@ object Solution:
         WithData[Summit](currentSummit)
 
     val tempo = count(resultWithData)
-    println(resultWithData)
+
+    val summitsWithBacklinks = summits.map:
+      currentSummit =>
+        val backlinks = summits.flatMap:
+          otherSummit => otherSummit.nexts.find:
+            (crossRoad, _) => Summit.toName(crossRoad) == currentSummit.name
+        Summit(currentSummit.name, (currentSummit.nexts ::: backlinks).distinct)
+
+    summitsWithBacklinks.foreach(println)
+
+    {
+      given summitsHolder2: SummitsHolder = SummitsHolder(summitsWithBacklinks)
+      val result2 = topologicalSort(summitsHolder2.byName("0-1")).values
+      val resultWithData2 = result2.zipWithIndex.map:
+        case (currentSummit, 0) =>
+          WithData[Summit](currentSummit, 0)
+        case (currentSummit, _) =>
+          WithData[Summit](currentSummit)
+      println(count(resultWithData2))
+    }
+
 
 
     val result1 = s"${tempo}"
@@ -60,8 +80,8 @@ export TypeOfLocation.*
 type DistanceToCrossRoad = (CrossRoad, Int)
 
 case class Summit(name: String, nexts: List[DistanceToCrossRoad]):
-  override def toString: String = s"[$name]"
-  //override def toString: String = s"[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1.position} (${current._2})").mkString}"
+  //override def toString: String = s"[$name]"
+  override def toString: String = s"[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1.position} (${current._2})").mkString}"
 
 object Summit:
   def toName(crossRoad: CrossRoad): String = toName(crossRoad.position)
