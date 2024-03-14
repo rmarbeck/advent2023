@@ -1,62 +1,75 @@
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    given forest: Forest = Forest.from(inputLines)
+    val resultPart1 = {
+      given forest: Forest = Forest.from(inputLines)
 
-    val crossRoads = findCrossRoads
+      val crossRoads = findCrossRoads
 
-    val summits = crossRoads.map:
-      currentCrossRoad =>
-        val nextSummits =
-          crossRoads.flatMap:
-            nextCrossRoad =>
-              nextCrossRoad.from.find(_._1.position == currentCrossRoad.position).map:
-                (_ , distance) => (nextCrossRoad, distance)
+      val summits = crossRoads.map:
+        currentCrossRoad =>
+          val nextSummits =
+            crossRoads.flatMap:
+              nextCrossRoad =>
+                nextCrossRoad.from.find(_._1.position == currentCrossRoad.position).map:
+                  (_, distance) => DistanceToSummit(Summit.toName(nextCrossRoad), distance)
 
-        Summit(Summit.toName(currentCrossRoad), nextSummits)
+          Summit(Summit.toName(currentCrossRoad), nextSummits)
 
-    given summitsHolder: SummitsHolder = SummitsHolder(summits)
+      given summitsHolder: SummitsHolder = SummitsHolder(summits)
 
-    /*val graph = GraphFromListWithNexts(summits)(summitsHolder.nextOf)
+      val result = topologicalSort(summitsHolder.byName("0-1")).values
 
-    val endName = Summit.toName(Position(forest.height-1, forest.width-2))
+      val resultWithData = result.zipWithIndex.map:
+        case (currentSummit, 0) =>
+          WithData[Summit](currentSummit, 1)
+        case (currentSummit, _) =>
+          WithData[Summit](currentSummit)
 
-    val result = Dijkstra.solve(graph, summitsHolder.byName("0-1"), List(summitsHolder.byName(endName)))*/
+      count(resultWithData)
+    }
 
-    val result = topologicalSort(summitsHolder.byName("0-1")).values
+    val resultPart2 = {
+      given forest: Forest = Forest.from(inputLines.map(_.replaceAll("[\\^<>v]+", ".")))
 
-    val resultWithData = result.zipWithIndex.map:
-      case (currentSummit, 0) =>
-        WithData[Summit](currentSummit, 0)
-      case (currentSummit, _) =>
-        WithData[Summit](currentSummit)
+      val crossRoads = findCrossRoads
 
-    val tempo = count(resultWithData)
+      val summits = crossRoads.map:
+        currentCrossRoad =>
+          val nextSummits =
+            crossRoads.flatMap:
+              nextCrossRoad =>
+                nextCrossRoad.from.find(_._1.position == currentCrossRoad.position).map:
+                  (_, distance) => DistanceToSummit(Summit.toName(nextCrossRoad), distance)
 
-    val summitsWithBacklinks = summits.map:
-      currentSummit =>
-        val backlinks = summits.flatMap:
-          otherSummit => otherSummit.nexts.find:
-            (crossRoad, _) => Summit.toName(crossRoad) == currentSummit.name
-        Summit(currentSummit.name, (currentSummit.nexts ::: backlinks).distinct)
+          Summit(Summit.toName(currentCrossRoad), nextSummits)
 
-    summitsWithBacklinks.foreach(println)
+      val summitsWithBacklinks = summits.map:
+        currentSummit =>
+          val backlinks = summits.filterNot(_ == currentSummit).flatMap:
+            otherSummit =>
+              otherSummit.nexts.find:
+                nextDistanceToSummit => nextDistanceToSummit.name == currentSummit.name
+              .map(otherSummitThatContainsCurrentInNext => DistanceToSummit(otherSummit.name, otherSummitThatContainsCurrentInNext._2))
+          Summit(currentSummit.name, (currentSummit.nexts ::: backlinks).distinct)
 
-    {
       given summitsHolder2: SummitsHolder = SummitsHolder(summitsWithBacklinks)
-      val result2 = topologicalSort(summitsHolder2.byName("0-1")).values
+      val endName = Summit.toName(Position(forest.height-1, forest.width-2))
+      val result2 = countPart2(summitsHolder2.byName("0-1"), Nil, summitsHolder2.byName(endName))
+      result2.flatMap(_._1).get
+      /*val result2 = topologicalSort(summitsHolder2.byName("0-1")).values
       val resultWithData2 = result2.zipWithIndex.map:
         case (currentSummit, 0) =>
           WithData[Summit](currentSummit, 0)
         case (currentSummit, _) =>
           WithData[Summit](currentSummit)
-      println(count(resultWithData2))
+      println(count(resultWithData2))*/
     }
 
 
 
-    val result1 = s"${tempo}"
-    val result2 = s""
+    val result1 = s"${resultPart1}"
+    val result2 = s"${resultPart2}"
 
     (s"${result1}", s"${result2}")
 
@@ -70,6 +83,8 @@ case class Position(row: Int, col: Int):
 
   lazy val around = List(north, south, west, east)
 
+  lazy val sorter: Int = - (col + row)
+
   override def toString: String = s"$row,$col"
 
 enum TypeOfLocation:
@@ -77,22 +92,30 @@ enum TypeOfLocation:
 
 export TypeOfLocation.*
 
+type SummitName = String
+
 type DistanceToCrossRoad = (CrossRoad, Int)
 
-case class Summit(name: String, nexts: List[DistanceToCrossRoad]):
+case class DistanceToSummit(name: SummitName, distance: Int):
+  lazy val sorter: (Int, Int) = (distance, Summit.fromName(name).sorter)
+
+case class Summit(name: SummitName, nexts: List[DistanceToSummit]):
   //override def toString: String = s"[$name]"
-  override def toString: String = s"[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1.position} (${current._2})").mkString}"
+  override def toString: String = s"\n[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1} (${current._2})").mkString}"
 
 object Summit:
-  def toName(crossRoad: CrossRoad): String = toName(crossRoad.position)
-  def toName(position: Position): String = s"${position.row}-${position.col}"
+  def toName(crossRoad: CrossRoad): SummitName = toName(crossRoad.position)
+  def toName(position: Position): SummitName = s"${position.row}-${position.col}"
+  def fromName(name: SummitName): Position =
+    name match
+      case s"${row}-${col}" => Position(row.toInt, col.toInt)
 
 case class SummitsHolder(allSummits: Seq[Summit]):
   val byName: Map[String, Summit] = allSummits.map(current => current.name -> current).toMap
   def nextOf(summit: Summit): List[Summit] =
-    summit.nexts.map(_._1).map(Summit.toName).map(byName)
+    summit.nexts.map(_._1).map(byName)
   def distanceBetween(first: Summit, second: Summit): Int =
-    first.nexts.find(current => Summit.toName(current._1) == second.name).map(_._2).get
+    first.nexts.find(current => current._1 == second.name).map(_._2).get
 
 
 case class CrossRoad(position: Position, from: List[DistanceToCrossRoad] = Nil):
@@ -141,7 +164,7 @@ def findNext(crossRoads: List[CrossRoad], nextPosition: Option[Position], curren
 def findCrossRoads(using forest: Forest): List[CrossRoad] =
   val start = Position(0,1)
   val initialCrossRoad = CrossRoad(start)
-  findNext(List(initialCrossRoad), Some(start), 1, Nil, Nil)
+  findNext(List(initialCrossRoad), Some(start), 0, Nil, Nil)
 
 case class Forest(places: Array[Array[TypeOfLocation]]):
   lazy val height = places.length
