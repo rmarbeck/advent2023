@@ -60,23 +60,39 @@ object Summit:
 case class SummitsHolder(allSummits: Seq[Summit]):
   def makeFullDuplexConnexions: SummitsHolder =
     val summitsWithDualConnexions =
-      allSummits.map:
-        currentSummit =>
-          val backlinks = allSummits.withFilter(_ != currentSummit).flatMap:
-            otherSummit =>
-              otherSummit.nexts.find:
-                (summitName, _) => summitName == currentSummit.name
-              .map((_, distanceToSummit) => (otherSummit.name, distanceToSummit))
-          Summit(currentSummit.name, (currentSummit.nexts ++ backlinks).distinct)
+      for
+        toAddTo <- allSummits
+        nameOfSummitWeAddBacklinksTo = toAddTo.name
+        backlinks =
+          for
+            toLookIn <- allSummits; if toLookIn != toAddTo
+            found <- toLookIn.nexts; if found._1 == nameOfSummitWeAddBacklinksTo
+          yield
+            (toLookIn.name, found._2)
+      yield
+        Summit(nameOfSummitWeAddBacklinksTo, (toAddTo.nexts ++ backlinks).distinct)
+
     SummitsHolder(summitsWithDualConnexions)
 
   private val byName: Map[String, Summit] = allSummits.map(current => current.name -> current).toMap
-  private lazy val nextOfArray: Array[List[Int]] = allSummits.toArray.map:
-    _.nexts.map(current => byName(current._1)).map(getIndex)
+  private lazy val nextOfArray: Array[List[Int]] =
+    for
+      summitToFindNext <- allSummits.toArray
+      nexts = summitToFindNext.nexts.map(_._1)
+    yield
+      nexts.map(name => getIndex(byName(name)))
+
   private lazy val distanceBetweenArray: Array[Array[Int]] =
-    allSummits.toArray.map:
-      summit => allSummits.toArray.map:
-        insideSummit => summit.nexts.find(_._1 == insideSummit.name).fold(Int.MaxValue)(_._2)
+    for
+      summitOne <- allSummits.toArray
+      distancesToSummitOne =
+        for
+          summitTwo <- allSummits.toArray
+        yield
+          summitOne.nexts.find(_._1 == summitTwo.name).fold(Int.MaxValue)(_._2)
+    yield
+      distancesToSummitOne
+
   private def getIndex(summit: Summit): Int = allSummits.indexOf(summit)
   private def fromIndex(index: Int): Summit = allSummits(index)
 
