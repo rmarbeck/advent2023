@@ -62,7 +62,7 @@ case class SummitsHolder(allSummits: Seq[Summit]):
     val summitsWithDualConnexions =
       allSummits.map:
         currentSummit =>
-          val backlinks = allSummits.filterNot(_ == currentSummit).flatMap:
+          val backlinks = allSummits.withFilter(_ != currentSummit).flatMap:
             otherSummit =>
               otherSummit.nexts.find:
                 (summitName, _) => summitName == currentSummit.name
