@@ -30,7 +30,7 @@ object Solution:
       val start = summitsHolder2.byPosition(forest.startPosition)
       val end = summitsHolder2.byPosition(forest.endPosition)
       val result2 = countDFS(start, end)
-      result2.flatMap(_._1).get
+      result2.get
     }
 
 
@@ -83,7 +83,9 @@ case class SummitsHolder(allSummits: Seq[Summit]):
     nextOfCache.getOrElseUpdate(summit.name, summit.nexts.map(_._1).map(byName))
   val distanceCache: collection.mutable.Map[String, Int] = collection.mutable.Map()
   def distanceBetween(first: Summit, second: Summit): Int =
-    distanceCache.getOrElseUpdate(s"${first.name}${second.name}", first.nexts.find(current => current._1 == second.name).map(_._2).get)
+    distanceCache.get(s"${second.name}${first.name}").getOrElse {
+      distanceCache.getOrElseUpdate(s"${first.name}${second.name}", first.nexts.find(current => current._1 == second.name).map(_._2).get)
+    }
 
 case class CrossRoad(position: Position, from: List[DistanceToCrossRoad] = Nil)
 

@@ -17,23 +17,23 @@ class WithData[T](element: T, private var currentDistance: Long = Long.MinValue)
   def updateDistance(newDistance: Long): Unit =
     currentDistance = newDistance
 
-def countDFS(from: Summit, to: Summit)(using summitsHolder: SummitsHolder): Option[(Option[Long], List[Summit])] =
+def countDFS(from: Summit, to: Summit)(using summitsHolder: SummitsHolder): Option[Long] =
   countDFS(from, Set(), to)
 
-def countDFS(element: Summit, visited: Set[Summit], result: Summit)(using summitsHolder: SummitsHolder): Option[(Option[Long], List[Summit])] =
+def countDFS(element: Summit, visited: Set[Summit], result: Summit)(using summitsHolder: SummitsHolder): Option[Long] =
       summitsHolder.nextOf(element).filterNot(visited.contains) match
         case Nil =>
           element.name == result.name match
-            case true => Some(Some(0l), List(element))
+            case true => Some(0l)
             case false => None
         case value =>
           val validResults = value.flatMap:
             current =>
               val deepResult = countDFS(current, visited + element , result)
               deepResult match
-                case Some(Some(value), currentList) => Some(Some(value + summitsHolder.distanceBetween(element, current)), element +: currentList)
+                case Some(value) => Some(value + summitsHolder.distanceBetween(element, current))
                 case _ => None
-          validResults.maxByOption(_._1.get)
+          validResults.maxOption
 
 @tailrec
 def countTopologicallySorted(elementsSorted: List[WithData[Summit]])(using summitsHolder: SummitsHolder): Long =
