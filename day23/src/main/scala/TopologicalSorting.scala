@@ -1,9 +1,8 @@
+import scala.annotation.tailrec
 
 class Heap:
   var values = List[Summit]()
   def push(summit: Summit): Unit = values = summit +: values
-
-  override def toString: String = values.map(_.name).mkString(";")
 
 class Visited:
   var values = List[Summit]()
@@ -12,17 +11,17 @@ class Visited:
 
   override def toString: String = values.mkString(";")
 
-
 class WithData[T](element: T, private var currentDistance: Long = Long.MinValue):
   def getElement = element
   def getCurrentDistance: Long = currentDistance
   def updateDistance(newDistance: Long): Unit =
     currentDistance = newDistance
 
-  override def toString: String = s"{$element, $getCurrentDistance}"
+def countDFS(from: Summit, to: Summit)(using summitsHolder: SummitsHolder): Option[(Option[Long], List[Summit])] =
+  countDFS(from, Set(), to)
 
-def countPart2(element: Summit, visited: List[Summit], result: Summit)(using summitsHolder: SummitsHolder): Option[(Option[Long], List[Summit])] =
-      summitsHolder.nextOf(element).filterNot(current => visited.map(_.name).contains(current.name)) match
+def countDFS(element: Summit, visited: Set[Summit], result: Summit)(using summitsHolder: SummitsHolder): Option[(Option[Long], List[Summit])] =
+      summitsHolder.nextOf(element).filterNot(visited.contains) match
         case Nil =>
           element.name == result.name match
             case true => Some(Some(0l), List(element))
@@ -30,13 +29,14 @@ def countPart2(element: Summit, visited: List[Summit], result: Summit)(using sum
         case value =>
           val validResults = value.flatMap:
             current =>
-              val deepResult = countPart2(current, element +: visited , result)
+              val deepResult = countDFS(current, visited + element , result)
               deepResult match
                 case Some(Some(value), currentList) => Some(Some(value + summitsHolder.distanceBetween(element, current)), element +: currentList)
-                case None => None
+                case _ => None
           validResults.maxByOption(_._1.get)
 
-def count(elementsSorted: List[WithData[Summit]])(using summitsHolder: SummitsHolder): Long =
+@tailrec
+def countTopologicallySorted(elementsSorted: List[WithData[Summit]])(using summitsHolder: SummitsHolder): Long =
   elementsSorted match
     case Nil => throw Exception("Not supported")
     case head :: Nil => head.getCurrentDistance
@@ -47,14 +47,18 @@ def count(elementsSorted: List[WithData[Summit]])(using summitsHolder: SummitsHo
             val newDistance = head.getCurrentDistance + summitsHolder.distanceBetween(head.getElement, withDataElement.getElement)
             if ( newDistance > withDataElement.getCurrentDistance)
               withDataElement.updateDistance(newDistance)
-      count(tail)
+      countTopologicallySorted(tail)
 
 
-def topologicalSort(staringBy: Summit)(using summitsHolder: SummitsHolder): Heap =
+def topologicalSort(staringBy: Summit)(using summitsHolder: SummitsHolder): List[WithData[Summit]] =
   val heap = new Heap
   val visited = new Visited
   topologicalSort(List(staringBy), visited, heap)
-  heap
+  heap.values.zipWithIndex.map:
+    case (currentSummit, 0) =>
+      WithData[Summit](currentSummit, 0)
+    case (currentSummit, _) =>
+      WithData[Summit](currentSummit)
 
 def topologicalSort(elements: List[Summit], visitedElements: Visited, heap: Heap)(using summitsHolder: SummitsHolder): Unit =
   elements match
