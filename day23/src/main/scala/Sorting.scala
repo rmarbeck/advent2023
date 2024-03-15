@@ -1,15 +1,14 @@
 import scala.annotation.tailrec
+import scala.collection.immutable.BitSet
 
 class Heap:
-  var values = List[Summit]()
-  def push(summit: Summit): Unit = values = summit +: values
+  var values = List[Int]()
+  def push(summitIndex: Int): Unit = values = summitIndex +: values
 
 class Visited:
-  var values = List[Summit]()
-  def add(summit: Summit): Unit = values = summit +: values
-  def contains(summit: Summit): Boolean = values.contains(summit)
-
-  override def toString: String = values.mkString(";")
+  var values = BitSet()
+  def add(summitIndex: Int): Unit = values = values + summitIndex
+  def contains(summitIndex: Int): Boolean = values.contains(summitIndex)
 
 class WithData[T](element: T, private var currentDistance: Long = Long.MinValue):
   def getElement = element
@@ -17,13 +16,13 @@ class WithData[T](element: T, private var currentDistance: Long = Long.MinValue)
   def updateDistance(newDistance: Long): Unit =
     currentDistance = newDistance
 
-def countDFS(from: Summit, to: Summit)(using summitsHolder: SummitsHolder): Option[Long] =
-  countDFS(from, Set(), to)
+def countDFS(from: Int, to: Int)(using summitsHolder: SummitsHolder): Option[Long] =
+  countDFS(from, BitSet(), to)
 
-def countDFS(element: Summit, visited: Set[Summit], result: Summit)(using summitsHolder: SummitsHolder): Option[Long] =
+def countDFS(element: Int, visited: BitSet, result: Int)(using summitsHolder: SummitsHolder): Option[Long] =
       summitsHolder.nextOf(element).filterNot(visited.contains) match
         case Nil =>
-          element.name == result.name match
+          element == result match
             case true => Some(0l)
             case false => None
         case value =>
@@ -36,7 +35,7 @@ def countDFS(element: Summit, visited: Set[Summit], result: Summit)(using summit
           validResults.maxOption
 
 @tailrec
-def countTopologicallySorted(elementsSorted: List[WithData[Summit]])(using summitsHolder: SummitsHolder): Long =
+def countTopologicallySorted(elementsSorted: List[WithData[Int]])(using summitsHolder: SummitsHolder): Long =
   elementsSorted match
     case Nil => throw Exception("Not supported")
     case head :: Nil => head.getCurrentDistance
@@ -45,22 +44,22 @@ def countTopologicallySorted(elementsSorted: List[WithData[Summit]])(using summi
         current => elementsSorted.find(_.getElement == current).foreach:
           withDataElement =>
             val newDistance = head.getCurrentDistance + summitsHolder.distanceBetween(head.getElement, withDataElement.getElement)
-            if ( newDistance > withDataElement.getCurrentDistance)
+            if (newDistance > withDataElement.getCurrentDistance)
               withDataElement.updateDistance(newDistance)
       countTopologicallySorted(tail)
 
 
-def topologicalSort(staringBy: Summit)(using summitsHolder: SummitsHolder): List[WithData[Summit]] =
+def topologicalSort(startingBy: Int)(using summitsHolder: SummitsHolder): List[WithData[Int]] =
   val heap = new Heap
   val visited = new Visited
-  topologicalSort(List(staringBy), visited, heap)
+  topologicalSort(List(startingBy), visited, heap)
   heap.values.zipWithIndex.map:
     case (currentSummit, 0) =>
-      WithData[Summit](currentSummit, 0)
+      WithData[Int](currentSummit, 0)
     case (currentSummit, _) =>
-      WithData[Summit](currentSummit)
+      WithData[Int](currentSummit)
 
-def topologicalSort(elements: List[Summit], visitedElements: Visited, heap: Heap)(using summitsHolder: SummitsHolder): Unit =
+def topologicalSort(elements: List[Int], visitedElements: Visited, heap: Heap)(using summitsHolder: SummitsHolder): Unit =
   elements match
     case Nil => ()
     case head :: tail =>

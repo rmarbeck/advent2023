@@ -5,7 +5,7 @@ object Solution:
 
     given forest: Forest = Forest.from(inputLines)
     val resultPart1 = {
-      val summits = findSummits(part2 = false)//.sortBy(-_.nexts.length).distinctBy(_.name)
+      val summits = findSummits(part2 = false)
       given summitsHolder: SummitsHolder = SummitsHolder(summits)
 
       val start = summitsHolder.byPosition(forest.startPosition)
@@ -17,23 +17,11 @@ object Solution:
     val resultPart2 = {
       val summits = findSummits(part2 = true)
 
-      val summitsWithBacklinks = summits.map:
-        currentSummit =>
-          val backlinks = summits.filterNot(_ == currentSummit).flatMap:
-            otherSummit =>
-              otherSummit.nexts.find:
-                (nextDistanceToSummit, _) => nextDistanceToSummit == currentSummit.name
-              .map(otherSummitThatContainsCurrentInNext => (otherSummit.name, otherSummitThatContainsCurrentInNext._2))
-          Summit(currentSummit.name, (currentSummit.nexts ::: backlinks).distinct)
-
-      given summitsHolder2: SummitsHolder = SummitsHolder(summitsWithBacklinks)
+      given summitsHolder2: SummitsHolder = SummitsHolder(summits).makeFullDuplexConnexions
       val start = summitsHolder2.byPosition(forest.startPosition)
       val end = summitsHolder2.byPosition(forest.endPosition)
-      val result2 = countDFS(start, end)
-      result2.get
+      countDFS(start, end).get
     }
-
-
 
     val result1 = s"${resultPart1}"
     val result2 = s"${resultPart2}"
@@ -50,8 +38,6 @@ case class Position(row: Int, col: Int):
 
   lazy val around = List(north, south, west, east)
 
-  override def toString: String = s"$row,$col"
-
 enum TypeOfLocation:
   case Path, Tree, SlopeUp, SlopeDown, SlopeLeft, SlopeRight
 
@@ -59,35 +45,46 @@ export TypeOfLocation.*
 
 type SummitName = String
 
-type DistanceToCrossRoad = (CrossRoad, Int)
 type DistanceToSummit = (SummitName, Int)
-
 
 case class Summit(name: SummitName, nexts: List[DistanceToSummit]):
   lazy val position: Position = Summit.fromName(name)
   override def toString: String = s"[$name]"
-  //override def toString: String = s"\n[$name] ${nexts.map(current => s"\n  |\n   -> ${current._1} (${current._2})").mkString}"
 
 object Summit:
-  def toName(crossRoad: CrossRoad): SummitName = toName(crossRoad.position)
   def toName(position: Position): SummitName = s"${position.row}-${position.col}"
-  def fromName(name: SummitName): Position =
+  private def fromName(name: SummitName): Position =
     name match
       case s"${row}-${col}" => Position(row.toInt, col.toInt)
 
 case class SummitsHolder(allSummits: Seq[Summit]):
-  val byName: Map[String, Summit] = allSummits.map(current => current.name -> current).toMap
-  def byPosition(position: Position): Summit = byName(Summit.toName(position))
-  val nextOfCache: collection.mutable.Map[String, List[Summit]] = collection.mutable.Map()
-  def nextOf(summit: Summit): List[Summit] =
-    nextOfCache.getOrElseUpdate(summit.name, summit.nexts.map(_._1).map(byName))
-  val distanceCache: collection.mutable.Map[String, Int] = collection.mutable.Map()
-  def distanceBetween(first: Summit, second: Summit): Int =
-    distanceCache.get(s"${second.name}${first.name}").getOrElse {
-      distanceCache.getOrElseUpdate(s"${first.name}${second.name}", first.nexts.find(current => current._1 == second.name).map(_._2).get)
-    }
+  def makeFullDuplexConnexions: SummitsHolder =
+    val summitsWithDualConnexions =
+      allSummits.map:
+        currentSummit =>
+          val backlinks = allSummits.filterNot(_ == currentSummit).flatMap:
+            otherSummit =>
+              otherSummit.nexts.find:
+                (summitName, _) => summitName == currentSummit.name
+              .map((_, distanceToSummit) => (otherSummit.name, distanceToSummit))
+          Summit(currentSummit.name, (currentSummit.nexts ++ backlinks).distinct)
+    SummitsHolder(summitsWithDualConnexions)
 
-case class CrossRoad(position: Position, from: List[DistanceToCrossRoad] = Nil)
+  private val byName: Map[String, Summit] = allSummits.map(current => current.name -> current).toMap
+  private lazy val nextOfArray: Array[List[Int]] = allSummits.toArray.map:
+    _.nexts.map(current => byName(current._1)).map(getIndex)
+  private lazy val distanceBetweenArray: Array[Array[Int]] =
+    allSummits.toArray.map:
+      summit => allSummits.toArray.map:
+        insideSummit => summit.nexts.find(_._1 == insideSummit.name).fold(Int.MaxValue)(_._2)
+  private def getIndex(summit: Summit): Int = allSummits.indexOf(summit)
+  private def fromIndex(index: Int): Summit = allSummits(index)
+
+  def byPosition(position: Position): Int = getIndex(byName(Summit.toName(position)))
+  def nextOf(index: Int): List[Int] = nextOfArray(index)
+  def distanceBetween(first: Int, second: Int): Int = distanceBetweenArray(first)(second)
+
+
 
 case class WalkingStatus(summitsToExplore: List[Summit], nextPosition: Option[Position], currentSteps: Int, alreadyExploredPositions: List[Position], alreadyExploredSummits: List[Summit], part2: Boolean = false)(using forest: Forest):
   def goNext = part2 match
@@ -97,6 +94,10 @@ case class WalkingStatus(summitsToExplore: List[Summit], nextPosition: Option[Po
 
   def nextPositionIsNotDefined: Boolean = nextPosition.isEmpty
   def nextPositionIsACrossRoad: Boolean = nextPosition.fold(false)(forest.isACrossRoad)
+
+  def nextPositionFromHead: List[Position] = nextPositionsAuthorized(summitsToExplore.head.position)
+
+  def summitFoundIsAKnownOne: Option[Summit] = (summitsToExplore ::: alreadyExploredSummits).find(_.position == nextPosition.get)
 
   def popHeadAndContinue: WalkingStatus =
     val head :: tail = summitsToExplore : @unchecked
@@ -120,61 +121,68 @@ case class WalkingStatus(summitsToExplore: List[Summit], nextPosition: Option[Po
     val updatedCurrentHead = head.copy(nexts = (newSummit.name, currentSteps) +: head.nexts)
     this.copy(summitsToExplore = updatedCurrentHead :: (tail :+ newSummit), nextPosition = None, currentSteps = 0)
 
+  lazy val situation: WalkingStatus.MainSituations =
+    summitsToExplore match
+      case Nil => NoMoreSummitToExplore
+      case head :: tail =>
+        nextPosition match
+          case None => NextPositionIsNotDefinedYet
+          case Some(nexPos) if nextPositionIsACrossRoad => NextPositionIsACrossRoad
+          case _ => NextPositionIsAPath
+
+object WalkingStatus:
+  enum MainSituations:
+    case NoMoreSummitToExplore, NextPositionIsNotDefinedYet, NextPositionIsACrossRoad, NextPositionIsAPath
+
+export WalkingStatus.MainSituations.*
+
 @tailrec
 def findNextSummit(walkingStatus: WalkingStatus)(using forest: Forest): List[Summit] =
-  walkingStatus.summitsToExplore match
-    case Nil => walkingStatus.alreadyExploredSummits
-    case head :: tail =>
-      walkingStatus match
-        case currentStatus if currentStatus.nextPositionIsNotDefined =>
-          val nextStatus = currentStatus.nextPositionsAuthorized(head.position) match
-            case Nil => currentStatus.popHeadAndContinue
-            case newNextPosition :: _ => currentStatus.continueViaHead(newNextPosition)
-          findNextSummit(nextStatus)
-        case currentStatus if currentStatus.nextPositionIsACrossRoad =>
-          val nexStatus = (currentStatus.summitsToExplore ::: currentStatus.alreadyExploredSummits).find(_.position == currentStatus.nextPosition.get) match
-            case Some(previouslyFound) => currentStatus.passingThroughKnownSummit(previouslyFound)
-            case None => currentStatus.passingThroughNewSummit
-          findNextSummit(nexStatus)
-        case _ => findNextSummit(walkingStatus.walk)
+  walkingStatus.situation match
+    case NoMoreSummitToExplore => walkingStatus.alreadyExploredSummits
+    case NextPositionIsAPath => findNextSummit(walkingStatus.walk)
+    case NextPositionIsNotDefinedYet =>
+      val nextStatus = walkingStatus.nextPositionFromHead match
+        case Nil => walkingStatus.popHeadAndContinue
+        case newNextPosition :: _ => walkingStatus.continueViaHead(newNextPosition)
+      findNextSummit(nextStatus)
+    case NextPositionIsACrossRoad =>
+      val nexStatus = walkingStatus.summitFoundIsAKnownOne match
+        case None => walkingStatus.passingThroughNewSummit
+        case Some(previouslyFound) => walkingStatus.passingThroughKnownSummit(previouslyFound)
+      findNextSummit(nexStatus)
 
 def findSummits(part2: Boolean)(using forest: Forest): List[Summit] =
   val start = Position(0,1)
   val initialSummit = Summit(Summit.toName(start), Nil)
   findNextSummit(WalkingStatus(List(initialSummit), Some(start), 0, Nil, Nil, part2))
 
-
-
 case class Forest(places: Array[Array[TypeOfLocation]]):
-  lazy val height = places.length
-  lazy val width = places(0).length
+  private lazy val height = places.length
+  private lazy val width = places(0).length
   lazy val startPosition = Position(0, 1)
   lazy val endPosition = Position(height-1, width-2)
-  def nbOfSlopes: Int = places.flatten.count:
-    case SlopeUp | SlopeDown | SlopeLeft | SlopeRight => true
-    case _ => false
 
   private def isReachable(position: Position): Boolean =
     val Position(row, col) = position
     places.isDefinedAt(row) && places(row).isDefinedAt(col) && places(row)(col) != Tree
 
   private def isReachableFrom(position: Position, from: Position): Boolean =
-    val Position(row, col) = position
-    if (isReachable(position))
+    isReachable(position) && {
+      val Position(row, col) = position
       (places(row)(col), row - from.row, col - from.col) match
-      case (Path, _, _) => true
-      case (SlopeUp, rowChange, _) if rowChange < 0 => true
-      case (SlopeDown, rowChange, _) if rowChange > 0 => true
-      case (SlopeLeft, _, colChange) if colChange < 0 => true
-      case (SlopeRight, _, colChange) if colChange > 0=> true
-      case _ => false
-    else
-      false
+        case (Path, _, _) => true
+        case (SlopeUp, rowChange, _) if rowChange < 0 => true
+        case (SlopeDown, rowChange, _) if rowChange > 0 => true
+        case (SlopeLeft, _, colChange) if colChange < 0 => true
+        case (SlopeRight, _, colChange) if colChange > 0 => true
+        case _ => false
+    }
 
   def nextPart1(position: Position): List[Position] = position.around.filter(isReachableFrom(_, position))
   def nextPart2(position: Position): List[Position] = position.around.filter(isReachable)
 
-  def isACrossRoad(position: Position): Boolean = position.around.filter(isReachable).length > 2 || (position.row == height -1 && position.col == width - 2)
+  def isACrossRoad(position: Position): Boolean = position.around.count(isReachable) > 2 || position == endPosition
 
 object Forest:
   def from(inputLines: Seq[String]): Forest =
