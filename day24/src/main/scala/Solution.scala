@@ -1,6 +1,5 @@
 import scala.annotation.tailrec
-import collection.parallel.*
-import collection.parallel.CollectionConverters.seqIsParallelizable
+
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -13,15 +12,16 @@ object Solution:
 
     val testZone = TestZone(Point(min, min, 0), Point(max, max, 0))
 
-    val resultPart1 = (for
-      case (first, index) <- trajectories.zipWithIndex
-      second <- trajectories.drop(index)
-      if first.intersectionXY(second).exists(testZone.contains)
-    yield
-      1
+    val resultPart1 = (
+      for
+        case (first, index) <- trajectories.zipWithIndex
+        second <- trajectories.drop(index)
+        if first.intersectionXY(second).exists(testZone.contains)
+      yield
+        1
     ).sum
 
-    val resultPart2 = calculateBySpeed(trajectories.toList).coords.take(3).sum
+    val resultPart2 = calculateBySpeed(trajectories).part2Score
 
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
@@ -34,47 +34,52 @@ case class Point(x: Long, y: Long, z: Long):
   def coords = List(x, y, z)
 case class PointDouble(x: Double, y: Double, z: Double)
 
+extension (double: Double)
+  def between(lower: Long, higher: Long): Boolean =
+    if (lower > higher)
+      between(higher, lower)
+    else
+      double >= lower && double <= higher
+
 case class TestZone(minPoint: Point, maxPoint: Point):
   def contains(point: PointDouble): Boolean =
     (point.x, point.y) match
-      case (x, y) if x >= minPoint.x && x <= maxPoint.x => y match
-        case value if value >= minPoint.y && y <= maxPoint.y => true
-        case _ => false
+      case (x, y) if x.between(minPoint.x, maxPoint.x) && y.between(minPoint.y, maxPoint.y) => true
       case _ => false
 
 case class Trajectory(xInit: Long, yInit: Long, zInit: Long, xSpeed: Long, ySpeed: Long, zSpeed: Long):
+  lazy val part2Score: Long = coordinates.take(3).sum
   lazy val isValid: Boolean = xInit >= 0 && yInit >= 0 && zInit >= 0
-  lazy val coords: List[Long] = List(xInit, yInit, zInit, xSpeed, ySpeed, zSpeed)
+  lazy val coordinates: List[Long] = List(xInit, yInit, zInit, xSpeed, ySpeed, zSpeed)
   private lazy val xAndY: List[Double] = List(xInit, yInit, xSpeed, ySpeed).map(_.toDouble)
 
   private def xAndYAtT(t: Double): PointDouble =
     PointDouble(xInit + t * xSpeed, yInit + t * ySpeed, 0d)
 
-  import collection.mutable.{Map, HashMap}
-  private val cachedAtT: Map[Long, Point] = HashMap[Long, Point]()
   def atT(t: Long): Point =
     Point(xInit + t * xSpeed, yInit + t * ySpeed, zInit + t * zSpeed)
 
   def intersects(otherTrajectory: Trajectory): Boolean =
-    def intersectsOnCoord(diff: Long, denom: Long): Either[Boolean, Long] =
+    def intersectsOnCoordinates(diff: Long, denom: Long): Either[Boolean, Long] =
       denom match
         case 0 => Left(diff == 0)
         case value => Right(diff/value)
 
-    val List(x1, y1, z1, xs1, ys1, zs1) = coords
-    val List(x2, y2, z2, xs2, ys2, zs2) = otherTrajectory.coords
+    val List(x1, y1, z1, xs1, ys1, zs1) = coordinates
+    val otherCoordinates @ List(x2, y2, z2, xs2, ys2, zs2) = otherTrajectory.coordinates
 
-    val denomX = (xs2 - xs1)
-    val denomY = (ys2 - ys1)
-    val denomZ = (zs2 - zs1)
+    val diffs @ List(diffX, diffY, diffZ, denomX, denomY, denomZ) = otherCoordinates.zip(coordinates).map(_ - _)
 
     denomX * denomY * denomZ match
       case 0 =>
-        val tests = List((x2 - x1, denomX), (y2 - y1, denomY), (z2 - z1, denomZ)).map((diff, denom) => intersectsOnCoord(diff, denom))
-        tests.forall(value => value.left.exists(identity) || value.isRight) && tests.flatMap(_.toOption).distinct.length <= 1 && tests.flatMap(_.toOption).forall(_ < 0)
+        val tests = diffs.take(3).zip(diffs.drop(3)).map(intersectsOnCoordinates)
+        tests.forall {
+          case Left(true) | Right(_) => true
+          case _ => false
+        } && tests.flatMap(_.toOption).distinct.length <= 1
       case _ =>
-        val tX = - (x2 - x1) / denomX
-        tX > 0 && tX == - (y2 - y1)/ denomY && tX == - (z2 - z1)/ denomZ
+        val tX = - diffX / denomX
+        tX > 0 && tX == - diffY / denomY && tX == - diffZ / denomZ
 
   def intersectionXY(otherTrajectory: Trajectory): Option[PointDouble] =
     val List(x1, y1, xs1, ys1) = xAndY
@@ -107,13 +112,12 @@ def calculateTrajectoryCrossing(first: Trajectory, second: Trajectory, time1: Lo
     val directingVector@ List(mx, my, mz) = point1.coords.zip(point2.coords).map((coord1, coord2) => (coord2 - coord1) / (time2 - time1))
     val List(xInit, yInit, zInit) = point1.coords.zip(directingVector).map((coord1, speed1) => coord1 - (speed1 * time1))
 
-    val result = Trajectory(xInit, yInit, zInit, mx, my, mz)
-    result
+    Trajectory(xInit, yInit, zInit, mx, my, mz)
 
-def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMax: Long = 0): Trajectory =
+def calculateBySpeed(trajectories: Seq[Trajectory], speedMin: Long = 0, speedMax: Long = 0): Trajectory =
   def forSpeed(first: Trajectory, second: Trajectory, xSpeed: Long, ySpeed: Long): Either[String, Option[Trajectory]] =
-    val List(x1, y1, z1, xs1, ys1, zs1) = first.coords.map(_.toDouble)
-    val List(x2, y2, z2, xs2, ys2, zs2) = second.coords.map(_.toDouble)
+    val List(x1, y1, z1, xs1, ys1, zs1) = first.coordinates.map(_.toDouble)
+    val List(x2, y2, z2, xs2, ys2, zs2) = second.coordinates.map(_.toDouble)
 
     val num = (x2 - x1) / (xSpeed - xs1) + (y1 - y2) / (ySpeed - ys1)
     val denom = ((xSpeed - xs2) / (xSpeed - xs1)) - ((ySpeed - ys2) / (ySpeed - ys1))
@@ -135,10 +139,10 @@ def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMa
 
   def speedsGenerator = Iterator.iterate(Spiral.Start)(_.next).map(value => (value.x, value.y))
 
-  val result = speedsGenerator.flatMap:
+  speedsGenerator.flatMap:
     (xSpeed, ySpeed) =>
       val possibleTrajectoriesToAnalyse = trajectories.filter(current => current.xSpeed != xSpeed && current.ySpeed != ySpeed)
-      possibleTrajectoriesToAnalyse.sliding(2, 1).map:
+      possibleTrajectoriesToAnalyse.toList.sliding(2, 1).map:
         case List(first, second) =>
           forSpeed(first, second, xSpeed, ySpeed)
         case _ => throw Exception("Not Possible")
@@ -150,18 +154,10 @@ def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMa
         case Right(value) => value
   .next
 
-  result
-
-def speeds(x: Long, y: Long, counter: Int = 0): LazyList[(Long, Long)] =
-  val next = counter match
-    case 0 => ((-x)+1, y)
-    case 1 => (x, (-y)+1)
-    case 2 => (-x, y)
-    case 3 => (x, -y)
-  (x, y) #:: speeds(next._1, next._2, (counter + 1)%4)
-
-final case class Spiral(
-                         x: Long, y: Long,
+/*
+  From @merlinorg
+ */
+final case class Spiral( x: Long, y: Long,
                          dx: Long, dy: Long,
                          count: Long, limit: Long,
                        ):
@@ -173,8 +169,7 @@ final case class Spiral(
     else
       copy(x = x + dx, y = y + dy, dy = dx, dx = -dy,
         count = limit + 1, limit = limit + 1)
-  end next
-end Spiral
+
 
 object Spiral:
   final val Start = Spiral(0, 0, 1, 0, 0, 0)
