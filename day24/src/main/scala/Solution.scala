@@ -53,7 +53,6 @@ case class Trajectory(xInit: Long, yInit: Long, zInit: Long, xSpeed: Long, ySpee
   import collection.mutable.{Map, HashMap}
   private val cachedAtT: Map[Long, Point] = HashMap[Long, Point]()
   def atT(t: Long): Point =
-    //cachedAtT.getOrElseUpdate(t, Point(xInit + t*xSpeed, yInit + t*ySpeed, zInit +t*zSpeed))
     Point(xInit + t * xSpeed, yInit + t * ySpeed, zInit + t * zSpeed)
 
   def intersects(otherTrajectory: Trajectory): Boolean =
@@ -99,116 +98,6 @@ object Trajectory:
       case _ => throw Exception("Not supported")
     Trajectory(xInit, yInit, zInit, xSpeed, ySpeed, zSpeed)
 
-case class XTrajectory(xInit: Long, xSpeed: Long, parent: Trajectory):
-  lazy val isValid: Boolean = xInit >= 0
-  lazy val coords: List[Long] = List(xInit, xSpeed)
-  import collection.mutable.{Map, HashMap}
-  private val cachedAtT: Map[Long, Long] = HashMap[Long, Long]()
-  def atT(t: Long): Long =
-    cachedAtT.getOrElseUpdate(t, xInit + t * xSpeed)
-
-  def intersects(otherXTrajectory: XTrajectory): Boolean =
-    val List(x1, xs1) = coords
-    val List(x2, xs2) = otherXTrajectory.coords
-
-    val denomX = (xs2 - xs1)
-
-    denomX match
-      case 0 =>
-        x2 - x1 == 0
-      case _ =>
-        val tX = -(x2 - x1) / denomX
-        tX > 0
-
-
-@tailrec
-def guessOnX(xTrajectories: List[XTrajectory], combos: List[List[XTrajectory]], time1: Int = 1, time2: Int = 2, timeMax: Int, trajectories: List[Trajectory]): Option[XTrajectory] =
-  def checkOnTrajectories(first: XTrajectory, second: XTrajectory): Boolean =
-    val target = calculateTrajectoryCrossing(first.parent, second.parent, time1, time2)
-    target.isValid && trajectories.forall(_ intersects target)
-
-  time1 == timeMax match
-    case true => None
-    case false =>
-      val result = combos.find:
-        case List(first, second) =>
-          val target = calculateXTrajectoryCrossing(first, second, time1, time2)
-          target.isValid && xTrajectories.forall(_ intersects target) && checkOnTrajectories(first, second)
-        case _ => throw Exception("Not supported")
-      result match
-        case Some(value) =>
-          val List(first, second) = value
-          Some(calculateXTrajectoryCrossing(first, second, time1, time2))
-        case None =>
-          time2 == timeMax match
-            case true => guessOnX(xTrajectories, combos, time1 + 1, time1 + 2, timeMax, trajectories)
-            case false => guessOnX(xTrajectories, combos, time1, time2 + 1, timeMax, trajectories)
-
-def guessOnX(trajectories: List[Trajectory], start: Int, timeMax: Int): Option[XTrajectory] =
-  val xTrajectories = trajectories.map(current => XTrajectory(current.xInit, current.xSpeed, current))
-  val combos = xTrajectories.combinations(2).toList
-  val combosAndReverse = combos.head :: combos.head.reverse :: Nil
-  guessOnX(xTrajectories, combosAndReverse, start, start + 1, timeMax, trajectories)
-
-@tailrec
-def guess3Rec(trajectories: List[Trajectory], combos: List[List[Trajectory]], time1: Int = 1, time2: Int = 2, timeMax: Int): Option[Trajectory] =
-  time1 == timeMax match
-    case true => None
-    case false =>
-      val result = combos.par.find:
-        case List(first, second) =>
-          val target = calculateTrajectoryCrossing(first, second, time1, time2)
-          target.isValid && trajectories.forall(_ intersects target)
-        case _ => throw Exception("Not supported")
-      result match
-        case Some(value) =>
-          val List(first, second) = value
-          Some(calculateTrajectoryCrossing(first, second, time1, time2))
-        case None =>
-          time2 == timeMax match
-            case true => guess3Rec(trajectories, combos, time1 + 1, time1 + 2, timeMax)
-            case false => guess3Rec(trajectories, combos, time1, time2 + 1, timeMax)
-
-def guess3(trajectories: List[Trajectory], timeMax: Int): Trajectory =
-  val combos = trajectories.combinations(2).toList
-  val combosAndReverse = combos.head :: combos.head.reverse :: Nil
-  guess3Rec(trajectories, combosAndReverse, 1, 2, timeMax).get
-
-
-def guess(trajectories: List[Trajectory], timeMax: Int): Trajectory =
-  val combos = trajectories.combinations(2).toList
-  val combosAndReverse = combos ::: combos.map(_.reverse)
-  (1 to timeMax).flatMap:
-    time1 => (1+time1 to timeMax).flatMap:
-      time2 =>
-        val result = combosAndReverse.find:
-          case List(first, second) =>
-            val target = calculateTrajectoryCrossing(first, second, time1, time2)
-            trajectories.filter(current => current != first && current != second).forall(_ intersects target)
-          case _ => throw Exception("Not possible")
-        result.map:
-          case List(first, second) =>
-            val target = calculateTrajectoryCrossing(first, second, time1, time2)
-            println(s"[$target] $first and $second, $time1 - $time2 ${trajectories.map(_ intersects target)}")
-            calculateTrajectoryCrossing(first, second, time1, time2)
-          case _ => throw Exception("Not supported")
-  .headOption.get
-
-
-def guess2(trajectories: List[Trajectory], timeMax: Int): Trajectory =
-  val combos = trajectories.combinations(2).toList
-  val combosAndReverse = combos :: combos.map(_.reverse)
-  combos.flatMap:
-    case List(first, second) =>
-      for
-        time1 <- 1 to timeMax
-        time2 <- time1+1 to timeMax
-        target = calculateTrajectoryCrossing(first, second, time1, time2)
-        if trajectories.filter(current => current != first && current != second).forall(_ intersects target)
-      yield
-        target
-    case _ => throw Exception("Not possible")
-  .find(_ => true).get
 
 def calculateTrajectoryCrossing(first: Trajectory, second: Trajectory, time1: Long, time2: Long): Trajectory =
   if (time1 > time2)
@@ -221,18 +110,8 @@ def calculateTrajectoryCrossing(first: Trajectory, second: Trajectory, time1: Lo
     val result = Trajectory(xInit, yInit, zInit, mx, my, mz)
     result
 
-def calculateXTrajectoryCrossing(first: XTrajectory, second: XTrajectory, time1: Long, time2: Long): XTrajectory =
-  if (time1 > time2)
-    calculateXTrajectoryCrossing(second, first, time2, time1)
-  else
-    val (point1, point2) = (first.atT(time1), second.atT(time2))
-    val mx = (point2 - point1) / (time2 - time1)
-    val xInit = point1 - (mx  * time1)
-
-    XTrajectory(xInit, mx, first.parent)
-
 def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMax: Long = 0): Trajectory =
-  def forSpeed(first: Trajectory, second: Trajectory, xSpeed: Long, ySpeed: Long): Either[Boolean, Trajectory] =
+  def forSpeed(first: Trajectory, second: Trajectory, xSpeed: Long, ySpeed: Long): Either[String, Option[Trajectory]] =
     val List(x1, y1, z1, xs1, ys1, zs1) = first.coords.map(_.toDouble)
     val List(x2, y2, z2, xs2, ys2, zs2) = second.coords.map(_.toDouble)
 
@@ -240,7 +119,7 @@ def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMa
     val denom = ((xSpeed - xs2) / (xSpeed - xs1)) - ((ySpeed - ys2) / (ySpeed - ys1))
 
     denom match
-      case 0 => Left(false)
+      case 0 => Left("Denom is null")
       case _ =>
         val t2 = num / denom
         val t1 = (t2 * (xSpeed - xs2) + x1 - x2) / (xSpeed - xs1)
@@ -249,29 +128,37 @@ def calculateBySpeed(trajectories: List[Trajectory], speedMin: Long = 0, speedMa
           case true =>
             val target = calculateTrajectoryCrossing(first, second, t1.toLong, t2.toLong)
             if (target.isValid && trajectories.filter(current => current != first && current != second).forall(_ intersects target))
-              Right(target)
+              Right(Some(target))
             else
-              Left(true)
-          case false => Left(true)
+              Right(None)
+          case false => Right(None)
 
   def speedsGenerator = Iterator.iterate(Spiral.Start)(_.next).map(value => (value.x, value.y))
 
-  val result = speedsGenerator.map:
+  val result = speedsGenerator.flatMap:
     (xSpeed, ySpeed) =>
       val possibleTrajectoriesToAnalyse = trajectories.filter(current => current.xSpeed != xSpeed && current.ySpeed != ySpeed)
       possibleTrajectoriesToAnalyse.sliding(2, 1).map:
         case List(first, second) =>
           forSpeed(first, second, xSpeed, ySpeed)
+        case _ => throw Exception("Not Possible")
       .find:
-        case Left(true) | Right(_) => true
+        case Right(_) => true
         case _ => false
       .flatMap:
         case Left(_) => None
-        case Right(value) => Some(value)
-  .find(_.isDefined).get
+        case Right(value) => value
+  .next
 
-  result.get
+  result
 
+def speeds(x: Long, y: Long, counter: Int = 0): LazyList[(Long, Long)] =
+  val next = counter match
+    case 0 => ((-x)+1, y)
+    case 1 => (x, (-y)+1)
+    case 2 => (-x, y)
+    case 3 => (x, -y)
+  (x, y) #:: speeds(next._1, next._2, (counter + 1)%4)
 
 final case class Spiral(
                          x: Long, y: Long,
