@@ -1,11 +1,20 @@
+import scala.annotation.tailrec
 import scala.collection.immutable.BitSet
+import scala.collection.parallel.*
+import collection.parallel.CollectionConverters.SetIsParallelizable
+import collection.parallel.CollectionConverters.seqIsParallelizable
+import collection.parallel.CollectionConverters.ArrayIsParallelizable
+import scala.util.Random
+
+val rand = new Random
 
 case class Summit(name: String)
 
 class SimpleGraph(wireBox: WireBox) extends Graph[Component]:
   override lazy val getElements: Seq[Component] = wireBox.wires.flatMap(_.ends).distinct
   override lazy val nbOfEdges: Long = wireBox.wires.size * 2
-  lazy val asInt: Map[Component, Int] = getElements.zipWithIndex.map((element, index) => element -> index).toMap
+  import collection.immutable.HashMap
+  lazy val asInt: Map[Component, Int] = collection.immutable.HashMap(getElements.zipWithIndex.map((element, index) => element -> index):_*)
 
   override def merge(one: Component, other: Component): Graph[Component] =
     val mergedComponent = Component(s"$one-$other")
@@ -23,46 +32,53 @@ class SimpleGraph(wireBox: WireBox) extends Graph[Component]:
 
     SimpleGraph(WireBox(updatedWires))
 
-  override def getNeighboursOfIn(current: Component, potentialNeighbours: Seq[Component]): Seq[Component] =
-    val potentials = BitSet(potentialNeighbours.map(asInt):_*)
-    getNeighboursOfIn(current, potentials)
+  import collection.mutable.{HashMap, Map}
+  val connectedToMap: Map[Component, Seq[Int]] = collection.mutable.HashMap[Component, Seq[Int]]()
+  def connectedTo(element: Component): Seq[Int] =
+    connectedToMap.getOrElseUpdate(element, wireBox.wires.flatMap(_.otherThan(element)).map(asInt))
 
-  def getNeighboursOfIn(current: Component, potentialNeighbours: BitSet): Seq[Component] =
-    wireBox.wires.flatMap(_.otherThan(current)).map(asInt).filter(potentialNeighbours.apply).map(getElements)
+  override def getNeighboursOfIn(current: Int, potentialNeighbours: BitSet): Int =
+    connectedTo(getElements(current)).foldLeft(0):
+      (acc, newElement) => potentialNeighbours(newElement) match
+        case true => acc + 1
+        case false => acc
 
-  override def findMostConnected(elementsOfSubGraph: List[Component], elementsToConnectTo: List[Component]): Component =
-    val elementsToConnectToAsInt = BitSet(elementsToConnectTo.map(asInt):_*)
-    elementsOfSubGraph.maxBy:
-      element =>  getNeighboursOfIn(element, elementsToConnectToAsInt).size
+  override def findMostConnected(elementsOfSubGraph: BitSet, elementsToConnectTo: BitSet): Int =
+    elementsOfSubGraph.toParArray.maxBy:
+      element =>  getNeighboursOfIn(element, elementsToConnectTo)
 
 
 trait Graph[T]:
   def getElements: Seq[T]
+  def asInt: Map[T, Int]
   def merge(one: T, other: T): Graph[T]
   def nbOfEdges: Long
-  def getNeighboursOfIn(current: T, potentialNeighbours: Seq[T]): Seq[T]
-  def findMostConnected(elementsOfSubGraph: List[T], elementsToConnectTo: List[T]): T
+  def getNeighboursOfIn(current: Int, potentialNeighbours: BitSet): Int
+  def findMostConnected(elementsOfSubGraph: BitSet, elementsToConnectTo: BitSet): Int
 
 
 def MinCupStep[T](graph: Graph[T], startingElement: T): (Graph[T], Long) =
-  def cutBetween(elementsOfSubGraph: List[T], element: T): Long = graph.getNeighboursOfIn(element, elementsOfSubGraph).size
+  def cutBetween(elementsOfSubGraph: BitSet, element: Int): Long = graph.getNeighboursOfIn(element, elementsOfSubGraph)
 
-  def findMostConnected(elementsOfSubGraph: List[T], elementsToConnectTo: List[T]): T =
+  def findMostConnected(elementsOfSubGraph: BitSet, elementsToConnectTo: BitSet): Int =
     graph.findMostConnected(elementsOfSubGraph, elementsToConnectTo)
 
-
-  def appendMostConnected(remainingElements: List[T], appendingList: List[T], fullGraph: Graph[T]): (T, T, Long) =
-    remainingElements match
-      case Nil => throw Exception("Not supported")
-      case head :: Nil =>
-        val cut = cutBetween(appendingList, head)
-        (appendingList.head, head, cut)
-      case head :: tail =>
+  @tailrec
+  def appendMostConnected(remainingElements: BitSet, appendingList: BitSet, headOfAppending: Int): (T, T, Long) =
+    remainingElements.size match
+      case 0 => throw Exception("Not supported")
+      case 1 =>
+        val cut = cutBetween(appendingList, remainingElements.head)
+        (graph.getElements(headOfAppending), graph.getElements(remainingElements.head), cut)
+      case _ =>
         val toAdd = findMostConnected(remainingElements, appendingList)
-        println(s"$toAdd (${remainingElements.size})")
-        appendMostConnected(remainingElements.filterNot(_ == toAdd), toAdd +: appendingList, fullGraph)
+        appendMostConnected(remainingElements.excl(toAdd), appendingList.incl(toAdd), toAdd)
 
-  val (t, s, cut ) = appendMostConnected(graph.getElements.toList.filterNot(_ == startingElement), List(startingElement), graph)
+  val startingAppending = graph.asInt(startingElement)
+  val rawRemaining = graph.getElements.map(graph.asInt).filterNot(_ == startingAppending)
+  val startingRemaining = BitSet(rawRemaining:_*)
+
+  val (t, s, cut ) = appendMostConnected(startingRemaining, BitSet(startingAppending), startingAppending)
   (graph.merge(t, s), cut)
 
 def MinCut[T](graph: Graph[T], startingElement: T): (Long, Long) =
@@ -71,6 +87,7 @@ def MinCut[T](graph: Graph[T], startingElement: T): (Long, Long) =
       case size if size < 1 => (bestCutGraphSize, cutValue)
       case _ =>
         val (resultingGraph, cut) = MinCupStep(graph, startingElement)
+        println(s"Stepping $cutValue $bestCutGraphSize vs $cut and ${resultingGraph.getElements.size}")
         if (cut < cutValue)
           callStep(resultingGraph, startingElement, resultingGraph.getElements.size, cut)
         else

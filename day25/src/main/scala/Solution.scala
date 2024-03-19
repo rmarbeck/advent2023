@@ -4,7 +4,7 @@ object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
     val wirebox = WireBox.from(inputLines)
-    println(MinCut(SimpleGraph(wirebox), wirebox.wires.head.ends.head))
+    println(MinCutRandom(SimpleGraphForRandom(wirebox), 3, 10500))
 
 
     val result1 = s""
