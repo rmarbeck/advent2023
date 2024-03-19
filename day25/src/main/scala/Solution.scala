@@ -3,7 +3,8 @@ import java.awt.Component
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    println(WireBox.from(inputLines))
+    val wirebox = WireBox.from(inputLines)
+    println(MinCut(SimpleGraph(wirebox), wirebox.wires.head.ends.head))
 
 
     val result1 = s""
@@ -33,5 +34,14 @@ case class Component(name: String)
 
 case class Wire(ends: Set[Component]):
   require(ends.size == 2)
+  private lazy val endsIndexed = ends.toIndexedSeq
+
+  def otherThan(component: Component): Option[Component] =
+    endsIndexed.indexOf(component) match
+      case -1 => None
+      case 0 => Some(endsIndexed(1))
+      case 1 => Some(endsIndexed(0))
+
+  override def toString: String = ends.mkString(",")
 
 
