@@ -37,9 +37,9 @@ object Solver:
 
     val (part1, part2) = (inputs.map(_.reverse), inputs)
 
-    Seq(part1, part2).map {
+    /*Seq(part1, part2).map {
       _.map(computeWithLazyList(_)).sum
-    }.foreach(result => println(s"lazy => $result"))
+    }.foreach(result => println(s"lazy => $result"))*/
 
     val (result1, result2) = Seq(part1, part2).map {
       _.map(compute(_, 0)).sum }
