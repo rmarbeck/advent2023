@@ -4,17 +4,28 @@ object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
     val wirebox = WireBox.from(inputLines)
-    println(MinCutRandom(SimpleGraphForRandom(wirebox), 3, 10500))
+
+    val maxRandomTries = 3000
+    val nbOfCuts = 3
+
+    val searchResult = MinCutRandom(SimpleGraphForRandom(wirebox), nbOfCuts, maxRandomTries)
+
+    val resultPar1 = searchResult match
+      case Some(nbOnOneSide, _) =>
+        val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
+        nbOnOtherSide * nbOnOneSide
+      case _ => throw Exception("Not found")
 
 
-    val result1 = s""
+    val result1 = s"$resultPar1"
     val result2 = s""
 
     (s"${result1}", s"${result2}")
 
 end Solution
 
-case class WireBox(wires: Seq[Wire])
+case class WireBox(wires: Seq[Wire]):
+  def nbOfEdges = wires.flatMap(_.ends).distinct.size
 
 object WireBox:
   def from(input: Seq[String]): WireBox =

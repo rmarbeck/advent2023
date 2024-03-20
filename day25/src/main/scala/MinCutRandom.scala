@@ -1,25 +1,50 @@
 import scala.annotation.tailrec
-import scala.collection.immutable.BitSet
 import scala.collection.parallel.*
-import collection.parallel.CollectionConverters.SetIsParallelizable
-import collection.parallel.CollectionConverters.seqIsParallelizable
-import collection.parallel.CollectionConverters.ArrayIsParallelizable
+import scala.collection.parallel.immutable.ParRange
 import scala.util.Random
 
 given random: Random = new Random
 
-class MergeableComponent(name: String, val mergingCounter: Long = 0) extends Component(name) with Mergeable[Component, MergeableComponent]:
-  def mergeWith(mergeableComponent: MergeableComponent): MergeableComponent =
-    val newName = s"${this.name}-${mergeableComponent.name}"
-    val (counter1, counter2) = (this.mergingCounter, mergeableComponent.mergingCounter)
-    MergeableComponent(newName, counter1 + counter2 + 1)
+trait Mergeable[A]:
+  def nbMerge: Long
+  def mergeWith(other: A): A
+
+class MergeableComponent(name: String, val mergingCounter: Long = 0) extends Component(name) with Mergeable[MergeableComponent]:
+  override def mergeWith(other: MergeableComponent): MergeableComponent =
+    val newName = s"$name-${other.name}"
+    MergeableComponent(newName, mergingCounter + other.mergingCounter + 1)
   override def nbMerge: Long = mergingCounter
 
-class SimpleGraphForRandom(wireBox: WireBox) extends GraphForRandom[MergeableComponent]:
-  override lazy val getElements: Seq[MergeableComponent] = wireBox.wires.flatMap(_.ends).distinct.map(component => MergeableComponent(component.name))
-  override lazy val nbOfEdges: Long = wireBox.wires.size * 2
+object MergeableComponent:
+  def apply(name: String, mergingCounter: Long): MergeableComponent = new MergeableComponent(name, mergingCounter)
+  def apply(component: Component): MergeableComponent = new MergeableComponent(component.name)
 
-  override def getNeighboursOfIn(first: MergeableComponent, second: MergeableComponent): Int = wireBox.wires.size
+
+trait GraphForRandom[T]:
+  def getElements: Seq[T]
+  def merge(one: T, other: T): GraphForRandom[T]
+  def cutBetweenTwoEdges: Either[String, Long]
+  def getConnectedElementsOnEdge(index: Int): (T, T)
+  def nbOfEdges: Long
+
+class SimpleGraphForRandom(wireBox: WireBox) extends GraphForRandom[MergeableComponent]:
+  override lazy val getElements: Seq[MergeableComponent] =
+    wireBox.wires.flatMap(_.ends).distinct.map:
+      case mergeableComponent: MergeableComponent => mergeableComponent
+      case component: Component => MergeableComponent(component)
+
+  override lazy val nbOfEdges: Long = wireBox.wires.size
+
+  override def cutBetweenTwoEdges: Either[String, Long] =
+    getElements.size match
+      case 2 => Right(nbOfEdges)
+      case value => Left(s"Not supported, should have 2 elements and has $value")
+
+  override def getConnectedElementsOnEdge(index: Int): (MergeableComponent, MergeableComponent) =
+    val ends = wireBox.wires(index).ends.map:
+      case mergeableComponent: MergeableComponent => mergeableComponent
+      case component: Component => MergeableComponent(component)
+    (ends.head, ends.last)
 
   override def merge(one: MergeableComponent, other: MergeableComponent): GraphForRandom[MergeableComponent] =
     val mergedComponent = one.mergeWith(other)
@@ -37,49 +62,34 @@ class SimpleGraphForRandom(wireBox: WireBox) extends GraphForRandom[MergeableCom
 
     SimpleGraphForRandom(WireBox(updatedWires))
 
-trait Mergeable[A, B]:
-  def nbMerge: Long
-  def mergeWith(other: B): B
-
-trait GraphForRandom[T]:
-  def getElements: Seq[T]
-  def merge(one: T, other: T): GraphForRandom[T]
-  def getNeighboursOfIn(first: T, second: T): Int
-  def nbOfEdges: Long
-
-
-def MinCupRandomStep[T <: Mergeable[_, _]](graph: GraphForRandom[T])(using random: Random): (Long, Long) =
-  def cutBetween(first: T, second: T, subGraph: GraphForRandom[T]): Long = subGraph.getNeighboursOfIn(first, second)
+def MinCupRandomStep[T <: Mergeable[_]](graph: GraphForRandom[T])(using random: Random): (Long, Long) =
+  def cut(subGraph: GraphForRandom[T]): Long = subGraph.cutBetweenTwoEdges.fold(_ => -1l, identity)
 
   def findTwoToMerge(graph: GraphForRandom[T]): (Long, Long) =
     graph.getElements.size match
       case 2 =>
-        val (first, second) = (graph.getElements(0), graph.getElements(1))
-        //println(s"$first")
-        //println(s"***************** ${cutBetween(first, second, graph)}")
-        //println(s"$second")
-        (first.nbMerge, cutBetween(first, second, graph))
+        val (first, second) = (graph.getElements.head, graph.getElements.last)
+        (first.nbMerge + 1, cut(graph))
       case size if size > 2 =>
-        val rank1 = random.nextInt(size)
-        val rank2 = rank1 * 2 % size match
-          case value if value == rank1 => (rank1 + 1) % size
-          case initial => initial
-        val (first, second) = (graph.getElements(rank1), graph.getElements(rank2))
+        val rank1 = random.nextInt(graph.nbOfEdges.toInt)
+        val (first, second) = graph.getConnectedElementsOnEdge(rank1)
         findTwoToMerge(graph.merge(first, second))
 
   findTwoToMerge(graph)
 
-def MinCutRandom[T <: Mergeable[_, _]](graph: GraphForRandom[T], target: Int, maxTries: Int): Option[(Long, Long)] =
-  def solve(graph: GraphForRandom[T], bestCutGraphSize: Long, cutValue: Long)(using Random): (Long, Long) =
-    MinCupRandomStep(graph)(using Random)
+def MinCutRandom[T <: Mergeable[_]](graph: GraphForRandom[T], target: Int, maxTries: Int): Option[(Long, Long)] =
+  val nbProcs = Runtime.getRuntime.availableProcessors()
+  val innerLoopTries = nbProcs * 4
+  val outerLoopTries = maxTries / innerLoopTries
 
-  random.setSeed(10)
-  val sizeOfInitialGraph = graph.getElements.size
+  val result =
+    (1 to outerLoopTries).iterator.flatMap:
+      outerIndex =>
+        random.setSeed(outerIndex)
+        ParRange(start = 1, end = innerLoopTries, step = 1, inclusive = true).map:
+          _ => MinCupRandomStep(graph)(using Random)
+        .find:
+          (graphSize, cut) => cut <= target
+    .nextOption
 
-  val result = (1 to maxTries).par.map:
-     _=> solve(graph, sizeOfInitialGraph, graph.nbOfEdges)(using Random)
-  .find:
-    (graphSize, cut) => cut <= target
-
-  println(result)
   result
