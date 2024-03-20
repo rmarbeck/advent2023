@@ -8,9 +8,10 @@ object Solution:
 
     val bag = Bag(reds = 12, blues = 14, greens = 13)
 
-    val resultPart1 = games.filter(_.isBagContentPossible(bag)).map(_.number).sum
-    val resultPart2 = games.map(_.minimalBagPossible.power).sum
-
+    val (resultPart1, resultPart2) = games.foldLeft((0, 0l)):
+      case (acc, game) if game.isBagContentPossible(bag) => (acc._1 + game.number, acc._2 + game.minimalBagPossible.power)
+      case (acc, game) => (acc._1, acc._2 + game.minimalBagPossible.power)
+    
     val result1 = s"$resultPart1"
     val result2 = s"$resultPart2"
 
@@ -50,7 +51,7 @@ object Draw:
 case class Game(number: Int, draws: Seq[Draw]):
   def minimalBagPossible: Bag =
     val colorsOfBag = draws.foldLeft(List(0, 0, 0)):
-      case (acc, draw) => acc.zip(draw.colors).map(math.max(_, _))
+      (acc, draw) => acc.zip(draw.colors).map(math.max(_, _))
 
     fromColors[Bag](colorsOfBag)
 
