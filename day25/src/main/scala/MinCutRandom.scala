@@ -27,29 +27,31 @@ trait GraphForRandom[T]:
   def getConnectedElementsOnEdge(index: Int): (T, T)
   def nbOfEdges: Long
 
-class SimpleGraphForRandom(wireBox: WireBox) extends GraphForRandom[MergeableComponent]:
-  override lazy val getElements: Seq[MergeableComponent] =
-    wireBox.wires.flatMap(_.ends).distinct.map:
-      case mergeableComponent: MergeableComponent => mergeableComponent
-      case component: Component => MergeableComponent(component)
 
-  override lazy val nbOfEdges: Long = wireBox.wires.size
+trait WireBlackBox[A <: Mergeable[_]]:
+  def getConnectedElementsOnEdge(index: Int): (A, A)
+  def getSummits: Seq[A]
+  def merge(first: A, second: A): WireBlackBox[A]
+  def nbOfEdges: Long
 
-  override def cutBetweenTwoEdges: Either[String, Long] =
-    getElements.size match
-      case 2 => Right(nbOfEdges)
-      case value => Left(s"Not supported, should have 2 elements and has $value")
+
+case class SimpleWireBlackBox(wires: Seq[Wire[_]]) extends WireBlackBox[MergeableComponent]:
+  private val internalWires = wires.toIndexedSeq.map:
+      wire =>
+        val newEnds = wire.ends.map:
+          case mergeableComponent: MergeableComponent => mergeableComponent
+          case component: Component => MergeableComponent(component)
+        Wire(newEnds)
 
   override def getConnectedElementsOnEdge(index: Int): (MergeableComponent, MergeableComponent) =
-    val ends = wireBox.wires(index).ends.map:
-      case mergeableComponent: MergeableComponent => mergeableComponent
-      case component: Component => MergeableComponent(component)
+    val ends = internalWires(index).ends
     (ends.head, ends.last)
-
-  override def merge(one: MergeableComponent, other: MergeableComponent): GraphForRandom[MergeableComponent] =
+  override lazy val getSummits: Seq[MergeableComponent] = internalWires.flatMap(_.ends).distinct
+  override lazy val nbOfEdges: Long = internalWires.size
+  override def merge(one: MergeableComponent, other: MergeableComponent): WireBlackBox[MergeableComponent] =
     val mergedComponent = one.mergeWith(other)
     val updatedWires =
-      wireBox.wires.withFilter:
+      internalWires.withFilter:
         wire => !(wire.ends.contains(one) && wire.ends.contains(other))
       .map:
         case wire if wire.ends.contains(one) =>
@@ -59,8 +61,43 @@ class SimpleGraphForRandom(wireBox: WireBox) extends GraphForRandom[MergeableCom
           val otherEnd = wire.ends.filterNot(_ == other).head
           Wire(Set(mergedComponent, otherEnd))
         case wire => wire
+    SimpleWireBlackBox(updatedWires)
 
-    SimpleGraphForRandom(WireBox(updatedWires))
+object SimpleWireBlackBox:
+  def from(wireBox: WireBox): SimpleWireBlackBox = SimpleWireBlackBox(wireBox.wires)
+
+class SimpleGraphForRandom(wireBlackBox: WireBlackBox[MergeableComponent]) extends GraphForRandom[MergeableComponent]:
+  override lazy val getElements: Seq[MergeableComponent] = wireBlackBox.getSummits
+
+  override lazy val nbOfEdges: Long = wireBlackBox.nbOfEdges
+
+  override def cutBetweenTwoEdges: Either[String, Long] =
+    getElements.size match
+      case 2 => Right(nbOfEdges)
+      case value => Left(s"Not supported, should have 2 elements and has $value")
+
+  override def getConnectedElementsOnEdge(index: Int): (MergeableComponent, MergeableComponent) = wireBlackBox.getConnectedElementsOnEdge(index)
+
+  override def merge(one: MergeableComponent, other: MergeableComponent) = SimpleGraphForRandom(wireBlackBox.merge(one, other))
+
+  /*def merge2(one: MergeableComponent, other: MergeableComponent): GraphForRandom[MergeableComponent] =
+    val mergedComponent = one.mergeWith(other)
+    val wiresAsMap: Map[Int, Seq[Wire]] = wireBox.wires.groupMap(wire => (wire.ends intersect Set(one, other)).size)(identity)
+    val updated: Seq[Wire] = wiresAsMap(1).map:
+        case wire if wire.ends.contains(one) =>
+          val otherEnd = wire.ends.filterNot(_ == one).head
+          Wire(Set(mergedComponent, otherEnd))
+        case wire =>
+          val otherEnd = wire.ends.filterNot(_ == other).head
+          Wire(Set(mergedComponent, otherEnd))
+
+    wiresAsMap.get(0) match
+      case Some(inPlace) => SimpleGraphForRandom(WireBox(updated ++ inPlace))
+      case _ => SimpleGraphForRandom(WireBox(updated))*/
+
+object SimpleGraphForRandom:
+  def apply(wireBlackBox: WireBlackBox[MergeableComponent]): SimpleGraphForRandom = new SimpleGraphForRandom(wireBlackBox)
+  def apply(wireBox: WireBox): SimpleGraphForRandom = new SimpleGraphForRandom(SimpleWireBlackBox.from(wireBox))
 
 def MinCupRandomStep[T <: Mergeable[_]](graph: GraphForRandom[T])(using random: Random): (Long, Long) =
   def cut(subGraph: GraphForRandom[T]): Long = subGraph.cutBetweenTwoEdges.fold(_ => -1l, identity)
@@ -73,7 +110,8 @@ def MinCupRandomStep[T <: Mergeable[_]](graph: GraphForRandom[T])(using random: 
       case size if size > 2 =>
         val rank1 = random.nextInt(graph.nbOfEdges.toInt)
         val (first, second) = graph.getConnectedElementsOnEdge(rank1)
-        findTwoToMerge(graph.merge(first, second))
+        val merged = graph.merge(first, second)
+        findTwoToMerge(merged)
 
   findTwoToMerge(graph)
 
@@ -87,7 +125,11 @@ def MinCutRandom[T <: Mergeable[_]](graph: GraphForRandom[T], target: Int, maxTr
       outerIndex =>
         random.setSeed(outerIndex)
         ParRange(start = 1, end = innerLoopTries, step = 1, inclusive = true).map:
-          _ => MinCupRandomStep(graph)(using Random)
+          _ =>
+            //val start = System.currentTimeMillis()
+            val result = MinCupRandomStep(graph)(using Random)
+            //println(s"${System.currentTimeMillis() - start} ms")
+            result
         .find:
           (graphSize, cut) => cut <= target
     .nextOption

@@ -24,12 +24,12 @@ object Solution:
 
 end Solution
 
-case class WireBox(wires: Seq[Wire]):
+case class WireBox(wires: Seq[Wire[_]]):
   def nbOfEdges = wires.flatMap(_.ends).distinct.size
 
 object WireBox:
   def from(input: Seq[String]): WireBox =
-    def from(singleInput: String): List[Wire] =
+    def from(singleInput: String): List[Wire[_]] =
       singleInput match
         case s"$first: $others" =>
           val firstComponent = Component(first)
@@ -43,11 +43,11 @@ object WireBox:
 
 case class Component(name: String)
 
-case class Wire(ends: Set[Component]):
+case class Wire[A <: Component](ends: Set[A]):
   require(ends.size == 2)
   private lazy val endsIndexed = ends.toIndexedSeq
 
-  def otherThan(component: Component): Option[Component] =
+  def otherThan(component: A): Option[A] =
     endsIndexed.indexOf(component) match
       case -1 => None
       case 0 => Some(endsIndexed(1))
