@@ -5,7 +5,11 @@ object Solution:
 
     val wirebox = WireBox.from(inputLines)
 
-    val maxRandomTries = 3000
+
+    val resultPar1 = runThroughPekko(wirebox)
+
+
+    /*val maxRandomTries = 3000
     val nbOfCuts = 3
 
     val searchResult = MinCutRandom(SimpleGraphForRandom(wirebox), nbOfCuts, maxRandomTries)
@@ -14,7 +18,7 @@ object Solution:
       case Some(nbOnOneSide, _) =>
         val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
         nbOnOtherSide * nbOnOneSide
-      case _ => throw Exception("Not found")
+      case _ => throw Exception("Not found")*/
 
 
     val result1 = s"$resultPar1"
@@ -23,6 +27,53 @@ object Solution:
     (s"${result1}", s"${result2}")
 
 end Solution
+
+def runThroughPekko(wirebox: WireBox) =
+  import org.apache.pekko
+  import pekko.util.Timeout
+  import concurrent.duration.DurationInt
+  import pekko.actor.typed.{Behavior, ActorRef, ActorSystem, PostStop}
+  import pekko.actor.typed.scaladsl.{Behaviors, ActorContext}
+  import scala.concurrent.Await
+  import scala.concurrent.Future
+  import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
+  import org.apache.pekko.actor.typed.scaladsl.AskPattern.schedulerFromActorSystem
+  import scala.util.Failure
+  import scala.util.Success
+  import math.Numeric.Implicits.infixNumericOps
+  import math.Integral.Implicits.infixIntegralOps
+
+  given timeout: Timeout = 60.seconds
+
+  val system: ActorSystem[PekkoRoot.Command] = ActorSystem(PekkoRoot(), "rootsolver")
+  given implicitSystem: ActorSystem[_] = system
+
+  val nbProcs = Runtime.getRuntime.availableProcessors()
+
+  system ! PekkoRoot.Start(nbProcs)
+
+  val eventualComputer: Future[PekkoRoot.ResultFromComputer] = system.ask(sender => PekkoRoot.Solve(wirebox, 3, sender))
+
+  eventualComputer.onComplete {
+    case Success(PekkoRoot.ResultFromComputer(value)) => println(s"[[[[[[[[  Yay, $value is the value!  ]]]]]]]]]")
+    case Failure(ex) => println(s"Boo! didn't get the right value: ${ex.getMessage}")
+  }(system.executionContext)
+
+
+  val resultOfComputation = Await.ready(eventualComputer, 14.seconds).value match
+    case Some(Success(response)) => response.result.getValue
+    case Some(Failure(e)) =>
+      println("Failure detected")
+      0
+    case _ =>
+      println("Other case")
+      -1
+
+  system ! PekkoRoot.Stop()
+  system.terminate()
+
+  Await.ready(system.whenTerminated, 10.seconds)
+  resultOfComputation
 
 case class WireBox(wires: Seq[Wire[_]]):
   def nbOfEdges = wires.flatMap(_.ends).distinct.size
