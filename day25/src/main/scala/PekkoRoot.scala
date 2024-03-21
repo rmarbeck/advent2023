@@ -22,13 +22,16 @@ object ComputingMessages:
 export ComputingMessages.*
 
 
-object PekkoRoot:
+object Messages:
   sealed trait Command
   final case class Start(max: Int) extends Command
   final case class Stop() extends Command
   final case class Solve(wireBox: WireBox, target: Int, requester: ActorRef[ResultFromComputer]) extends Command
   final case class ResultFromComputer(result: ComputingMessages.ComputationResult) extends Command
 
+export Messages.*
+
+object PekkoRoot:
   def apply(): Behavior[Command] =
     idle()
 
@@ -40,7 +43,7 @@ object PekkoRoot:
         message match
           case Start(max) =>
             val children =  ArrayBuffer[ActorRef[Computation]]()
-            context.log.debug("[Idle] : Starting children from {} to {}", children.length, max)
+            context.log.info("[Idle] : Starting children from {} to {}", children.length, max)
             for i <- 1 to max
               do {
                 children += context.spawn(Computer(i), s"computer_$i")
@@ -61,12 +64,17 @@ object PekkoRoot:
         case Solve(wireBox, target, sender) =>
           val backendResponseMapper: ActorRef[ComputationResult] =
             context.messageAdapter(rsp => ResultFromComputer(rsp))
-
           solve(wireBox, target, children, backendResponseMapper)
+
           waitingFirst(children, sender, None)
         case Stop() =>
+          context.log.info("[Ready] : Stopping children")
+          askChildrenToFinish(children)
           stopChildren(children)
           idle()
+        case ResultFromComputer(value) =>
+          context.log.debug("[Ready] : Receiving another answer, don't take it into account")
+          Behaviors.same
         case _ => Behaviors.unhandled
     }
 
@@ -83,6 +91,8 @@ object PekkoRoot:
           askChildrenToFinish(children)
           readyToResolve(children)
         case Stop() =>
+          context.log.info("[WaitingFirst] : Stopping children")
+          askChildrenToFinish(children)
           stopChildren(children)
           idle()
         case _ => Behaviors.unhandled
@@ -91,6 +101,7 @@ object PekkoRoot:
   private def solve(wireBox: WireBox, target: Int, currentChildren: ArrayBuffer[ActorRef[Computation]], sender: ActorRef[ComputationResult])(using context: ActorContext[Command]): Unit =
     context.log.debug("About to send mission with target {}", target)
     currentChildren.foreach(_ ! Mission(wireBox, target, sender))
+    context.log.debug("End of SOLVE ")
 
   private def askChildrenToFinish(currentChildren: ArrayBuffer[ActorRef[Computation]])(using context: ActorContext[Command]): Unit =
     currentChildren.foreach(current => {
@@ -99,10 +110,11 @@ object PekkoRoot:
   
   
   private def stopChildren(currentChildren: ArrayBuffer[ActorRef[Computation]])(using context: ActorContext[Command]): Unit =
+    context.log.debug("Stopping children")
     val children = currentChildren.clone()
     if currentChildren.nonEmpty then
       currentChildren.foreach(current => {
         context.stop(current)
         children -= current
       })
-    context.log.debug("************************ {} children after stopping", currentChildren.length)
+    context.log.info("************************ {} children after stopping", currentChildren.length)

@@ -1,28 +1,31 @@
 
-import PekkoRoot.ResultFromComputer
 import org.apache.pekko
 import pekko.actor.typed.{Behavior, ActorRef, ActorSystem, PostStop}
 import pekko.actor.typed.scaladsl.{Behaviors, ActorContext}
 
 import scala.util.Random
 
-given random: Random = new Random
-
 object Computer:
   import ComputingMessages.*
 
-  def apply(index: Int)(using Random): Behavior[Computation] = manage(index)
+  def apply(index: Int): Behavior[Computation] =
+    given random: Random = new Random
+    random.setSeed(index)
+    manage(index)
 
   private def manage(index: Int)(using Random): Behavior[Computation] =
     Behaviors.setup { context =>
       Behaviors.receiveMessage[Computation] {
         case Mission(wireBox, target, sender) =>
-          context.log.debug(s"Computer[$index] Starting mission from with target {}", target)
-          solve(wireBox, target, sender, index)
+          context.log.info(s"Computer[$index] Starting mission from with target {}", target)
+          context.self ! Continue()
+          retry(wireBox, target, sender, index)
         case Finish() =>
-          context.log.debug("[Idle] : No need to finish, not working.......")
+          context.log.info("[Idle] : No need to finish, not working.......")
           Behaviors.same
-        case _ => Behaviors.unhandled
+        case Continue() =>
+          context.log.debug("[Idle] : Receiving continuer, don't take it into account")
+          Behaviors.same
       }.receiveSignal {
         case (context, PostStop) =>
           context.log.debug("Computation stopped")
@@ -33,32 +36,18 @@ object Computer:
       }
     }
 
-  private def solve(wireBox: WireBox, target: Int, requester: ActorRef[ComputationResult], index: Int)(using Random): Behavior[Computation] =
-    Behaviors.setup[Computation] { context =>
-      context.log.debug("[Ready] : Solving....... ")
-
-      given ActorContext[Computation] = context
-
-      doRunMission(wireBox, target, index) match
-        case Some(validResponse) =>
-          requester ! Successful(validResponse)
-          manage(index)
-        case None =>
-          context.self ! Continue()
-          retry(wireBox, target, requester, index)
-    }
-
   private def retry(wireBox: WireBox, target: Int, requester: ActorRef[ComputationResult], index: Int)(using Random): Behavior[Computation] =
     Behaviors.receive[Computation] { (context, message) =>
       context.log.debug("[Retry] : Receiving message....... {}", message)
 
       message match
         case Continue() =>
-          /*val backendResponseMapper: ActorRef[ComputationResult] =
-            context.messageAdapter(rsp => ResultFromComputer(rsp))*/
+          context.log.info("[Retry] : Receiving message....... {}", message)
+          random.setSeed(random.nextInt())
 
           doRunMission(wireBox, target, index) match
             case Some(validResponse) =>
+              context.log.info("[Retry] : Solution found")
               requester ! Successful(validResponse)
               manage(index)
             case None =>
@@ -66,6 +55,7 @@ object Computer:
               Behaviors.same
 
         case Finish() =>
+          context.log.info("[Retry] : Receiving message....... {}", message)
           context.log.debug("[Retry] : Finishing.......")
           manage(index)
 
@@ -73,7 +63,6 @@ object Computer:
     }
 
   def doRunMission(wirebox: WireBox, target: Int, index: Int)(using random: Random): Option[Int] =
-    random.setSeed(index)
     MinCupRandomStep(SimpleGraphForRandom(wirebox))(using Random) match
       case (_, valueOfCut) if valueOfCut > target => None
       case (goal, _) => Some(goal.toInt)

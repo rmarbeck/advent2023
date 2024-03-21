@@ -1,79 +1,74 @@
-import java.awt.Component
+
+import scala.concurrent.Future
+import scala.concurrent.Await
+import org.apache.pekko
+import pekko.util.Timeout
+import concurrent.duration.DurationInt
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
     val wirebox = WireBox.from(inputLines)
 
-
-    val resultPar1 = runThroughPekko(wirebox)
-
-
-    /*val maxRandomTries = 3000
-    val nbOfCuts = 3
-
-    val searchResult = MinCutRandom(SimpleGraphForRandom(wirebox), nbOfCuts, maxRandomTries)
-
-    val resultPar1 = searchResult match
-      case Some(nbOnOneSide, _) =>
+    import concurrent.ExecutionContext.Implicits.global
+    val futureResultPart1 = runThroughPekko(wirebox)(using timeout = 120.seconds).map:
+      nbOnOneSide =>
         val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
         nbOnOtherSide * nbOnOneSide
-      case _ => throw Exception("Not found")*/
+
+    val resultPart1 =
+      try {
+        Await.result(futureResultPart1, 110.seconds).toString
+      } catch
+        case exception: Exception => "Not found within time limit"
 
 
-    val result1 = s"$resultPar1"
-    val result2 = s""
+    val result1 = s"${resultPart1}"
+    val result2 = s"Happy Christmas"
 
     (s"${result1}", s"${result2}")
 
 end Solution
 
-def runThroughPekko(wirebox: WireBox) =
-  import org.apache.pekko
-  import pekko.util.Timeout
-  import concurrent.duration.DurationInt
-  import pekko.actor.typed.{Behavior, ActorRef, ActorSystem, PostStop}
-  import pekko.actor.typed.scaladsl.{Behaviors, ActorContext}
-  import scala.concurrent.Await
-  import scala.concurrent.Future
+def runThroughPekko(wirebox: WireBox)(using timeout: Timeout): Future[Int] =
+
+  import pekko.actor.typed.{ActorRef, ActorSystem}
   import org.apache.pekko.actor.typed.scaladsl.AskPattern.Askable
   import org.apache.pekko.actor.typed.scaladsl.AskPattern.schedulerFromActorSystem
-  import scala.util.Failure
-  import scala.util.Success
-  import math.Numeric.Implicits.infixNumericOps
-  import math.Integral.Implicits.infixIntegralOps
+  import scala.concurrent.ExecutionContext
+  import scala.concurrent
 
-  given timeout: Timeout = 60.seconds
-
-  val system: ActorSystem[PekkoRoot.Command] = ActorSystem(PekkoRoot(), "rootsolver")
+  val system: ActorSystem[Messages.Command] = ActorSystem(PekkoRoot(), "rootsolver")
   given implicitSystem: ActorSystem[_] = system
 
   val nbProcs = Runtime.getRuntime.availableProcessors()
-
-  system ! PekkoRoot.Start(nbProcs)
-
-  val eventualComputer: Future[PekkoRoot.ResultFromComputer] = system.ask(sender => PekkoRoot.Solve(wirebox, 3, sender))
-
-  eventualComputer.onComplete {
-    case Success(PekkoRoot.ResultFromComputer(value)) => println(s"[[[[[[[[  Yay, $value is the value!  ]]]]]]]]]")
-    case Failure(ex) => println(s"Boo! didn't get the right value: ${ex.getMessage}")
-  }(system.executionContext)
+  // Leaving one core free is very important to allow other messages to be received during high load
+  system ! Messages.Start(nbProcs - 1)
 
 
-  val resultOfComputation = Await.ready(eventualComputer, 14.seconds).value match
-    case Some(Success(response)) => response.result.getValue
-    case Some(Failure(e)) =>
-      println("Failure detected")
-      0
+  import concurrent.ExecutionContext.Implicits.global
+
+  val eventualComputer: Future[Messages.ResultFromComputer] = {
+    system.ask(sender => Messages.Solve(wirebox, 3, sender))
+  }
+
+  eventualComputer.andThen {
     case _ =>
-      println("Other case")
-      -1
+      val start = System.currentTimeMillis()
+      loggerAOC.debug(s"Closing Pekko")
+      system ! Messages.Stop()
+      system.terminate()
+      try {
+        Await.ready(system.whenTerminated, 10.seconds)
+      } catch
+        case exception: Exception => loggerAOC.debug(s"Error occured when closing Pekko $exception")
+      loggerAOC.debug(s"Pekko closed in ${System.currentTimeMillis() - start} ms")
+  }
 
-  system ! PekkoRoot.Stop()
-  system.terminate()
+  eventualComputer.map:
+    value => value.result.getValue
 
-  Await.ready(system.whenTerminated, 10.seconds)
-  resultOfComputation
+
 
 case class WireBox(wires: Seq[Wire[_]]):
   def nbOfEdges = wires.flatMap(_.ends).distinct.size
