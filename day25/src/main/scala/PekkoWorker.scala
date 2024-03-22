@@ -1,7 +1,11 @@
 
 import org.apache.pekko
-import pekko.actor.typed.{Behavior, ActorRef, ActorSystem, PostStop}
+import pekko.actor.typed.{Behavior, ActorRef, ActorSystem, PostStop, DispatcherSelector}
 import pekko.actor.typed.scaladsl.{Behaviors, ActorContext}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.Success
+
 
 import scala.util.Random
 
@@ -17,14 +21,17 @@ object Computer:
     Behaviors.setup { context =>
       Behaviors.receiveMessage[Computation] {
         case Mission(wireBox, target, sender) =>
-          context.log.info(s"Computer[$index] Starting mission from with target {}", target)
+          context.log.debug(s"Computer[$index] Starting mission from with target {}", target)
           context.self ! Continue()
           retry(wireBox, target, sender, index)
         case Finish() =>
-          context.log.info("[Idle] : No need to finish, not working.......")
+          context.log.debug("[Idle] : No need to finish, not working.......")
           Behaviors.same
         case Continue() =>
-          context.log.debug("[Idle] : Receiving continuer, don't take it into account")
+          context.log.debug("[Idle] : Receiving continue, don't take it into account")
+          Behaviors.same
+        case ResultFound(result) =>
+          context.log.debug("[Idle] : Receiving good result, don't take it into account")
           Behaviors.same
       }.receiveSignal {
         case (context, PostStop) =>
@@ -38,31 +45,41 @@ object Computer:
 
   private def retry(wireBox: WireBox, target: Int, requester: ActorRef[ComputationResult], index: Int)(using Random): Behavior[Computation] =
     Behaviors.receive[Computation] { (context, message) =>
-      context.log.debug("[Retry] : Receiving message....... {}", message)
+      context.log.trace("[Retry] : Receiving message....... {}", message)
 
       message match
         case Continue() =>
-          context.log.info("[Retry] : Receiving message....... {}", message)
-          random.setSeed(random.nextInt())
+          context.log.debug("[Retry] : Receiving Continue()")
 
-          doRunMission(wireBox, target, index) match
-            case Some(validResponse) =>
-              context.log.info("[Retry] : Solution found")
-              requester ! Successful(validResponse)
-              manage(index)
-            case None =>
-              context.self ! Continue()
-              Behaviors.same
+          given executionContext: ExecutionContext =
+            context.system.dispatchers.lookup(DispatcherSelector.fromConfig("for-blocking-dispatcher"))
+
+          random.setSeed(random.nextInt())
+          doRunMission(wireBox, target, index).andThen:
+            case Success(Some(value: Int)) => context.self ! ResultFound(value)
+            case Success(None) => context.self ! Continue()
+            case _ =>
+              context.log.error("[Retry] : Error in retry, finishing")
+              context.self ! Finish()
+
+          Behaviors.same
+
+        case ResultFound(result) =>
+          requester ! Successful(result)
+          manage(index)
 
         case Finish() =>
-          context.log.info("[Retry] : Receiving message....... {}", message)
           context.log.debug("[Retry] : Finishing.......")
           manage(index)
 
-        case _ => Behaviors.unhandled
+        case _ =>
+          context.log.error("[Idle] : Unmanaged message received : {}", message.getClass)
+          Behaviors.unhandled
     }
 
-  def doRunMission(wirebox: WireBox, target: Int, index: Int)(using random: Random): Option[Int] =
-    MinCupRandomStep(SimpleGraphForRandom(wirebox))(using Random) match
-      case (_, valueOfCut) if valueOfCut > target => None
-      case (goal, _) => Some(goal.toInt)
+  private def doRunMission(wirebox: WireBox, target: Int, index: Int)(using random: Random, executionContext: ExecutionContext): Future[Option[Int]] =
+    Future {
+      MinCupRandomStep(SimpleGraphForRandom(wirebox))(using Random) match
+        case (_, valueOfCut) if valueOfCut > target => None
+        case (goal, _) => Some(goal.toInt)
+    }

@@ -42,9 +42,7 @@ def runThroughPekko(wirebox: WireBox)(using timeout: Timeout): Future[Int] =
   given implicitSystem: ActorSystem[_] = system
 
   val nbProcs = Runtime.getRuntime.availableProcessors()
-  // Leaving one core free is very important to allow other messages to be received during high load
-  system ! Messages.Start(nbProcs - 1)
-
+  system ! Messages.Start(nbProcs)
 
   import concurrent.ExecutionContext.Implicits.global
 
@@ -61,7 +59,7 @@ def runThroughPekko(wirebox: WireBox)(using timeout: Timeout): Future[Int] =
       try {
         Await.ready(system.whenTerminated, 10.seconds)
       } catch
-        case exception: Exception => loggerAOC.debug(s"Error occured when closing Pekko $exception")
+        case exception: Exception => loggerAOC.error(s"Error occured when closing Pekko $exception")
       loggerAOC.debug(s"Pekko closed in ${System.currentTimeMillis() - start} ms")
   }
 
