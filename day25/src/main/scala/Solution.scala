@@ -10,6 +10,17 @@ object Solution:
 
     val wirebox = WireBox.from(inputLines)
 
+    /*val maxRandomTries = 3000
+    val nbOfCuts = 3
+
+    val searchResult = MinCutRandom(BitSetGraphForRandom(wirebox), nbOfCuts, maxRandomTries)
+
+    val resultPart1 = searchResult match
+      case Some(nbOnOneSide, _) =>
+        val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
+        nbOnOtherSide * nbOnOneSide
+      case _ => throw Exception("Not found")*/
+
     import concurrent.ExecutionContext.Implicits.global
     val futureResultPart1 = runThroughPekko(wirebox)(using timeout = 120.seconds).map:
       nbOnOneSide =>

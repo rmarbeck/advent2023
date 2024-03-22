@@ -79,7 +79,10 @@ object Computer:
 
   private def doRunMission(wirebox: WireBox, target: Int, index: Int)(using random: Random, executionContext: ExecutionContext): Future[Option[Int]] =
     Future {
-      MinCupRandomStep(SimpleGraphForRandom(wirebox))(using Random) match
+      val start = System.currentTimeMillis()
+      val result = MinCupRandomStep(SimpleGraphForRandom(wirebox))(using Random) match
         case (_, valueOfCut) if valueOfCut > target => None
         case (goal, _) => Some(goal.toInt)
+      //println(s"Elapsed is ${System.currentTimeMillis() - start} ms")
+      result
     }
