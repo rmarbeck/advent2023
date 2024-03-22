@@ -148,7 +148,7 @@ object BitSetWireBlackBox:
 
     BitSetWireBlackBox(summits, wires)
 
-case class SimpleWireBlackBox(internalWires: Seq[Wire[MergeableComponent]]) extends WireBlackBox[MergeableComponent]:
+case class SimpleWireBlackBox(internalWires: IndexedSeq[Wire[MergeableComponent]]) extends WireBlackBox[MergeableComponent]:
   override def getConnectedElementsOnEdge(index: Int): (MergeableComponent, MergeableComponent) =
     val ends = internalWires(index).ends
     (ends.head, ends.last)
@@ -158,7 +158,7 @@ case class SimpleWireBlackBox(internalWires: Seq[Wire[MergeableComponent]]) exte
     val mergedComponent = one.mergeWith(other)
 
     val (toUpdate, uptoDate) = internalWires.partition(wire => wire.ends.contains(one) || wire.ends.contains(other))
-    val updatedWires2 =
+    val updatedWires =
       toUpdate.foldLeft(Seq[Wire[MergeableComponent]]()):
         case (acc, wire) if wire.ends.contains(one) && wire.ends.contains(other) => acc
         case (acc, wire) if wire.ends.contains(one) =>
@@ -168,13 +168,13 @@ case class SimpleWireBlackBox(internalWires: Seq[Wire[MergeableComponent]]) exte
           val otherEnd = wire.ends.filterNot(_ == other).head
           Wire(Set(mergedComponent, otherEnd)) +: acc
 
-    SimpleWireBlackBox(uptoDate ++ updatedWires2)
+    SimpleWireBlackBox(uptoDate ++ updatedWires)
 
 object SimpleWireBlackBox:
   def from(wireBox: WireBox): SimpleWireBlackBox = SimpleWireBlackBox.from(wireBox.wires)
   def from(wires: Seq[Wire[_]]) =
-    val forInternalUse: Seq[Wire[MergeableComponent]] =
-      wires.map:
+    val forInternalUse =
+      wires.toIndexedSeq.map:
         wire =>
           val newEnds = wire.ends.map:
             case mergeableComponent: MergeableComponent => mergeableComponent
