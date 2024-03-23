@@ -118,29 +118,22 @@ object NumberExt:
       case None => None
 
 object SymbolExt:
-  def unapply(str: String): Option[Char] =
-    str.size match
-      case 1 =>
-        str.head match
-          case '.' => None
-          case value if value.isDigit => None
-          case value => Some(value)
-      case _ => None
-
   def unapply(matchStr: Regex.Match)(using rowIndex: RowIndex): Option[Symbol] =
-    unapply(matchStr.matched) match
-      case Some(value) => Some(Symbol(value, Position(rowIndex, matchStr.start)))
-      case None => None
+    Some(Symbol(matchStr.matched.head, Position(rowIndex, matchStr.start)))
 
 object RegExpExtractor extends NumberAndSymbolsExtractor:
-  private val matcher = """(\d+)|(\.+)|([^0-9\.]+)""".r
+  private val matcher = """(\d+)|([^0-9\.])""".r
 
   override def from(singleLine: String, rowIndex: Int): (Seq[Number], Seq[Symbol]) =
     given RowIndex = rowIndex
     matcher.findAllMatchIn(singleLine).foldLeft((Seq[Number](), Seq[Symbol]())):
       case (acc, NumberExt(number)) => (number +: acc._1, acc._2)
       case (acc, SymbolExt(symbol)) => (acc._1, symbol +: acc._2)
-      case (acc, other) => (acc._1, acc._2)
+
+/**
+ * Other experimental extractors
+ *
+ */
 
 object ByCharacterExtractor extends NumberAndSymbolsExtractor:
   override def from(singleLine: String, rowIndex: RowIndex): (Seq[Number], Seq[Symbol]) =
