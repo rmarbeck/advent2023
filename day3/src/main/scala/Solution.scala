@@ -8,6 +8,7 @@ object Solution:
 
     val (numbers, symbols) = summon[NumberAndSymbolsExtractor].from(inputLines)
 
+    // As it is a set, using foldleft and not mapping to then summing
     val resultPart1 = getTouching(numbers, symbols).foldLeft(0)((acc, number) => acc + number.value)
     val resultPart2 = findGears(numbers, symbols.filter(_.value == '*')).map(_.ratio).sum
 
@@ -18,6 +19,7 @@ object Solution:
 
 end Solution
 
+// Two parameters (adding a second one for touching) to avoid closure to use value of initial parameter
 type Updater[A] = (Seq[Number], A) => A
 type UpdaterPart1 = Updater[Set[Number]]
 type UpdaterPart2 = Updater[List[GearRatio]]
