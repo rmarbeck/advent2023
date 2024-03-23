@@ -5,46 +5,44 @@ object Solution:
 
     val (numbers, symbols) = extractNumbersAndSymbols(inputLines)
 
-    val resultPart1 = getTouching(numbers.toList, symbols.toSet).toList.map(_.value)
-    val resultPart2 = findGears(numbers.toList, symbols.filter(_.value == '*').toSet).map(_.ratio)
+    val resultPart1 = getTouching(numbers, symbols).foldLeft(0)((acc, number) => acc + number.value)
+    val resultPart2 = findGears(numbers, symbols.filter(_.value == '*')).foldLeft(0)((acc, number) => acc + number.ratio)
 
-    val result1 = s"${resultPart1.sum}"
-    val result2 = s"${resultPart2.sum}"
+    val result1 = s"${resultPart1}"
+    val result2 = s"${resultPart2}"
 
     (s"${result1}", s"${result2}")
 
 end Solution
 
 @tailrec
-def getTouching(numbers: List[Number], symbols: Set[Symbol], touching: Set[Number] = Set()): Set[Number] =
-  numbers match
-    case Nil => touching
+def getTouching(numbers: Seq[Number], symbols: Seq[Symbol], touching: Set[Number] = Set()): Set[Number] =
+  (numbers.size, symbols.size) match
+    case (0, _) | (_, 0) => touching
     case _ =>
-      symbols match
-        case value if value == Set.empty => touching
-        case currentSetOfSymbols =>
-          val (head, tail) = (currentSetOfSymbols.head, currentSetOfSymbols.tail)
-          val (matching, notMatching) = numbers.partition(head touch _)
-          getTouching(notMatching, tail, touching ++ matching)
+      val (head, tail) = (symbols.head, symbols.tail)
+      val (matching, notMatching) = numbers.partition(head touch _)
+      getTouching(notMatching, tail, touching ++ matching.toSet)
 
 @tailrec
-def findGears(numbers: List[Number], symbols: Set[Symbol], touching: List[GearRatio] = Nil): List[GearRatio] =
-  numbers match
-    case Nil => touching
+def findGears(numbers: Seq[Number], symbols: Seq[Symbol], touching: List[GearRatio] = Nil): List[GearRatio] =
+  (numbers.size, symbols.size) match
+    case (0, _) | (_, 0) => touching
     case _ =>
-      symbols match
-        case value if value == Set.empty => touching
-        case currentSetOfSymbols =>
-          val (head, tail) = (currentSetOfSymbols.head, currentSetOfSymbols.tail)
-          val (matching, notMatching) = numbers.partition(head touch _)
-          matching match
-            case first :: second :: Nil => findGears(notMatching, tail, touching :+ GearRatio(first, second))
-            case _ => findGears(notMatching, tail, touching)
+      val (head, tail) = (symbols.head, symbols.tail)
+      val (matching, notMatching) = numbers.partition(head touch _)
+      matching.size match
+        case 2 => findGears(notMatching, tail, touching :+ GearRatio(matching.head, matching.last))
+        case _ => findGears(notMatching, tail, touching)
 
 case class GearRatio(firstGear: Number, secondGear: Number):
   lazy val ratio = (firstGear * secondGear).value
 
-case class Position(row: Int, col: Int)
+case class Position(row: Int, col: Int):
+  def follows(other: Position, of: Int): Boolean =
+    (row - other.row, col - other.col) match
+      case (0, drift) if drift == of => true
+      case _ => false
 
 sealed trait Element(val pos: Position):
   private val rowMin, rowMax: Int = pos.row
@@ -75,11 +73,40 @@ case class Number(value: Int, position: Position) extends Element(position):
   def *(other: Number): Number = this.copy(value = value * other.value)
   override val colMin = position.col
   override val colMax = colMin + value.toString.size - 1
+
 case class Symbol(value: Char, position: Position) extends Element(position):
   override val colMin = position.col
   override val colMax = colMin
 
+
+
 def extractNumbersAndSymbols(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
+  val numbersAndSymbols =
+    for
+      case (line, row) <- inputString.zipWithIndex
+      case (char, col) <- line.zipWithIndex
+      if char != '.'
+    yield
+      char match
+        case digit if digit.isDigit => Number(digit.asDigit, Position(row, col))
+        case symbol => Symbol(symbol, Position(row, col))
+
+  val (numbers, symbols) =
+    numbersAndSymbols.foldLeft((Nil: List[Number], Nil: List[Symbol])):
+      case (acc, number: Number) =>
+        acc._1 match
+          case Nil => (List(number), acc._2)
+          case head :: tail =>
+            if (number.position follows(head.position, head.value.toString.size))
+              (head.copy(value = head.value * 10 + number.value) +: tail, acc._2)
+            else
+              (number +: acc._1, acc._2)
+      case (acc, symbol: Symbol) => (acc._1, symbol +: acc._2)
+
+  (numbers, symbols)
+
+
+def extractNumbersAndSymbols2(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
   val numbers =
     inputString.zipWithIndex.flatMap:
       case (line, row) => line.zipWithIndex.filter(_._1.isDigit).foldLeft((List[Number](), -1)):
@@ -91,8 +118,8 @@ def extractNumbersAndSymbols(inputString: Seq[String]): (Seq[Number], Seq[Symbol
     inputString.zipWithIndex.flatMap:
       case (line, row) =>
         line.zipWithIndex
-          .filterNot(_._1.isDigit)
-          .filterNot(_._1 == '.')
+          .withFilter(!_._1.isDigit)
+          .withFilter(_._1 != '.')
           .map((symbol, index) => Symbol(symbol, Position(row, index)))
 
   (numbers,symbols)
