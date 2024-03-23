@@ -4,9 +4,11 @@ import scala.util.matching.Regex
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    given NumberAndSymbolsExtractor = RegExpExtractor
+    // Other approach
+    //given NumberAndSymbolsExtractor = RegExpExtractor
+    //val (numbers, symbols) = summon[NumberAndSymbolsExtractor].from(inputLines)
 
-    val (numbers, symbols) = summon[NumberAndSymbolsExtractor].from(inputLines)
+    val RegExpExtractor(numbers, symbols) = inputLines: @unchecked
 
     // As it is a set, using foldleft and not mapping to then summing
     val resultPart1 = getTouching(numbers, symbols).foldLeft(0)((acc, number) => acc + number.value)
@@ -130,6 +132,8 @@ object RegExpExtractor extends NumberAndSymbolsExtractor:
       case (acc, NumberExt(number)) => (number +: acc._1, acc._2)
       case (acc, SymbolExt(symbol)) => (acc._1, symbol +: acc._2)
 
+  def unapply(input: Seq[String]): Option[(Seq[Number], Seq[Symbol])] =
+    Some(from(input))
 /**
  * Other experimental extractors
  *
