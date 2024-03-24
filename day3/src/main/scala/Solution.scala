@@ -4,10 +4,6 @@ import scala.util.matching.Regex
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    // Other approach
-    //given NumberAndSymbolsExtractor = RegExpExtractor
-    //val (numbers, symbols) = summon[NumberAndSymbolsExtractor].from(inputLines)
-
     val RegExpExtractor(numbers, symbols) = inputLines: @unchecked
 
     // As it is a set, using foldleft and not mapping to then summing
@@ -90,13 +86,6 @@ case class Symbol(value: Char, position: Position) extends Element(position):
   override val colMin = position.col
   override val colMax = colMin
 
-/**
- * Different extractors to parse input
- *
- * Including a regex one with Scala Extractors using unapply
- *
- */
-
 trait NumberAndSymbolsExtractor:
   def from(inputLines: Seq[String]): (Seq[Number], Seq[Symbol]) =
     val results = for
@@ -134,88 +123,3 @@ object RegExpExtractor extends NumberAndSymbolsExtractor:
 
   def unapply(input: Seq[String]): Option[(Seq[Number], Seq[Symbol])] =
     Some(from(input))
-/**
- * Other experimental extractors
- *
- */
-
-object ByCharacterExtractor extends NumberAndSymbolsExtractor:
-  override def from(singleLine: String, rowIndex: RowIndex): (Seq[Number], Seq[Symbol]) =
-    from(Seq(singleLine))
-  override def from(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
-    val numbersAndSymbols =
-      for
-        case (line, row) <- inputString.zipWithIndex
-        case (char, col) <- line.zipWithIndex
-        if char != '.'
-      yield
-        char match
-          case digit if digit.isDigit => Number(digit.asDigit, Position(row, col))
-          case symbol => Symbol(symbol, Position(row, col))
-
-    val (numbers, symbols) =
-      numbersAndSymbols.foldLeft((Nil: List[Number], Nil: List[Symbol])):
-        case (acc, number: Number) =>
-          acc._1 match
-            case Nil => (List(number), acc._2)
-            case head :: tail =>
-              if (number.position follows(head.position, head.value.toString.size))
-                (head.copy(value = head.value * 10 + number.value) +: tail, acc._2)
-              else
-                (number +: acc._1, acc._2)
-        case (acc, symbol: Symbol) => (acc._1, symbol +: acc._2)
-
-    (numbers, symbols)
-
-object SimplerByCharacterExtractor extends NumberAndSymbolsExtractor:
-  override def from(singleLine: String, rowIndex: RowIndex): (Seq[Number], Seq[Symbol]) =
-    from(Seq(singleLine))
-  override def from(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
-    val numbersAndSymbols =
-      for
-        case (line, row) <- inputString.zipWithIndex
-        case (char, col) <- line.zipWithIndex
-        if char != '.'
-      yield
-        char match
-          case digit if digit.isDigit => Number(digit.asDigit, Position(row, col))
-          case symbol => Symbol(symbol, Position(row, col))
-
-    val numbers =
-      numbersAndSymbols.collect:
-        case number: Number => number
-      .foldLeft(Nil : List[Number]):
-        (acc, number: Number) =>
-          acc match
-            case Nil => List(number)
-            case head :: tail =>
-              if (number.position follows(head.position, head.value.toString.size))
-                head.copy(value = head.value * 10 + number.value) +: tail
-              else
-                number +: acc
-
-    val symbols = numbersAndSymbols.collect:
-      case symbol: Symbol => symbol
-
-    (numbers, symbols)
-
-object InitialExtractor extends NumberAndSymbolsExtractor:
-  override def from(singleLine: String, rowIndex: RowIndex): (Seq[Number], Seq[Symbol]) =
-    from(Seq(singleLine))
-  override def from(inputString: Seq[String]): (Seq[Number], Seq[Symbol]) =
-    val numbers =
-      inputString.zipWithIndex.flatMap:
-        case (line, row) => line.zipWithIndex.filter(_._1.isDigit).foldLeft((List[Number](), -1)):
-          case ((acc, nextIndexExpected), (digit, index)) if index == nextIndexExpected => ((acc.head * 10 + digit.asDigit) +: acc.tail, index + 1)
-          case ((acc, nextIndexExpected), (digit, index)) => (Number(digit.asDigit, Position(row, index)) +: acc, index + 1)
-        ._1
-
-    val symbols =
-      inputString.zipWithIndex.flatMap:
-        case (line, row) =>
-          line.zipWithIndex
-            .withFilter(!_._1.isDigit)
-            .withFilter(_._1 != '.')
-            .map((symbol, index) => Symbol(symbol, Position(row, index)))
-
-    (numbers,symbols)
