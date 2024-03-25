@@ -14,7 +14,7 @@ object Solution:
     do
       val numberOfCurrentCard = totalCards(index)
       (index + 1 to index + winnings).foreach:
-        case innerIndex =>
+        innerIndex =>
           totalCards.isDefinedAt(innerIndex) match
             case true => totalCards(innerIndex) += numberOfCurrentCard
             case false => ()
@@ -35,24 +35,15 @@ case class Card(winning: List[Int], draw: List[Int]):
       case 0 => 0
       case value => math.pow(2, value - 1).toInt
 
-
-
 object CardExt:
-
-  val CardMatcher = """Card[ ]+(\d+): (.+) \| (.+)""".r
+  private val CardMatcher = """(\d+): (.+) \| (.+)""".r.unanchored
   def unapply(str: String): Option[Card] =
     str match
       case CardMatcher(cardId, NumbersExt(winnings), NumbersExt(draws)) => Some(Card(winnings, draws))
       case _ => None
 
-  object NumbersExt:
-    val NumbersMatcher = """(\d+)""".r
+  private object NumbersExt:
     def unapply(str: String): Option[List[Int]] =
-      val values =
-        for
-          case NumbersMatcher(value) <- NumbersMatcher.findAllIn(str).toList
-        yield
-          value.toInt
-      values.size match
-        case 0 => None
-        case _ => Some(values)
+      """(\d+)""".r.unanchored.findAllIn(str).toList match
+        case Nil => None
+        case values => Some(values.map(_.toInt))
