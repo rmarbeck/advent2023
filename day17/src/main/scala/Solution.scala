@@ -1,3 +1,6 @@
+import scala.annotation.{tailrec, targetName}
+import scala.collection.immutable.TreeSet
+import scala.collection.parallel.immutable.ParVector
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 
@@ -5,121 +8,105 @@ val maxStepsInOneDirectionPart1 = 3
 val minStepsInOneDirectionPart1 = 1
 val maxStepsInOneDirectionPart2 = 10
 val minStepsInOneDirectionPart2 = 4
+
+type HeatMapper = Position => Long
+type Dimension = (Int, Int)
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
-    val (height: Int, width: Int) = (inputLines.length, inputLines(0).length)
+    val (height: Int, width: Int) = (inputLines.length, inputLines.head.length)
 
-    given heatMap: HeatMap = HeatMap(inputLines)
+    val heats = inputLines.map(_.toCharArray.map(_.asDigit)).toArray
 
-    given Valuer = heatMap.getHeat
+    given Dimension = (width, height)
 
-    val summitsPart1 = heatMap.getSummitsPart1
-
-    val graphPart1 = GraphFromArray(summitsPart1)(nextPart1)
-    val startPart1 = summitsPart1.find:
-      case Summit(0, 0, _, _, 0) => true
-      case _ => false
-    .get
-
-    val endPart1 = summitsPart1.toList.filter:
-      case Summit(row, col, _, Up2Down | Left2Right, _) if row == height - 1 && col == width - 1 => true
-      case _ => false
-
-    val before = System.currentTimeMillis()
-    val resultPart1Future: Future[List[Summit]] = Future:
-      Dijkstra.solveOptimized(graphPart1, startPart1, endPart1, true)
-
-    val summitsPart2 = heatMap.getSummitsPart2
-    val startPart2 = summitsPart2.find:
-      case Summit(0, 0, _, _, 0) => true
-      case _ => false
-    .get
-
-    val endPart2 = summitsPart2.toList.filter:
-      case Summit(row, col, _, Up2Down | Left2Right, lastDirCounter) if row == height - 1 && col == width - 1 && lastDirCounter >= minStepsInOneDirectionPart2 => true
-      case _ => false
-
-    val graphPart2 = GraphFromArray(summitsPart2)(nextPart2)
-
-    val resultPart2Future: Future[List[Summit]] = Future:
-      Dijkstra.solveOptimized(graphPart2, startPart2, endPart2, true)
-
-    import concurrent.duration.DurationInt
-    val finalResults: List[Int] = Await.result(
-      for
-        result1 <- resultPart1Future
-        result2 <- resultPart2Future
+    given HeatMapper =
+      (for
+        y <- heats.indices; x <- heats.head.indices
       yield
-        (result1, result2).toList.map(_.sliding(2).flatMap(summits => summits(1).to(summits(0))).sum)
-    , 4.minutes)
-
-    val resultPart1 = finalResults(0)
-    val resultPart2 = finalResults(1)
-
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
+        Position(x, y) -> heats(y)(x).toLong
+        ).toMap.apply
 
 
-  private def next(summit: Summit, min: Int, max: Int)(using heatMap: HeatMap): List[Summit] =
-    val (currentRow, currentCol) = (summit.row, summit.col)
+    import scala.collection.parallel._
+    import collection.parallel.CollectionConverters.ImmutableSeqIsParallelizable
+    val List(result1, result2) =
+      Seq(CrucibleConstraints.Part1, CrucibleConstraints.Part2).par.map:
+        constraints =>
+          given CrucibleConstraints = constraints
+          heatLoss(TreeSet(startingCrucible: _*), Set(), Position(width - 1, height - 1))
+      .toList
 
-    Direction.values.toList.filterNot(_ == summit.lastDir.opposite).flatMap:
-      currentDir =>
-        val toMoveTo = summit.lastDir == currentDir match
-          case true => 1
-          case false => min
-        val (nextRow, nextCol) = currentDir match
-          case Left2Right => (currentRow, currentCol + toMoveTo)
-          case Right2Left => (currentRow, currentCol - toMoveTo)
-          case Up2Down => (currentRow + toMoveTo, currentCol)
-          case Down2Up => (currentRow - toMoveTo, currentCol)
-
-        (heatMap.isDefinedAt(nextRow, nextCol), summit.lastDir == currentDir) match
-          case (false, _) => None
-          case (true, true) =>
-            summit.lastDirCounter match
-              case value if value == max => None
-              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDirCounter = value + toMoveTo))
-          case (true, false) =>
-            summit.lastDirCounter match
-              case value if value < min => None
-              case value => Some(summit.copy(row = nextRow, col = nextCol, value = heatMap.getHeat(nextRow, nextCol), lastDir = currentDir, lastDirCounter = toMoveTo))
-
-  private def nextPart1(summit: Summit)(using heatMap: HeatMap): List[Summit] = next(summit, minStepsInOneDirectionPart1, maxStepsInOneDirectionPart1)
-
-  private def nextPart2(summit: Summit)(using heatMap: HeatMap): List[Summit] = next(summit, minStepsInOneDirectionPart2, maxStepsInOneDirectionPart2)
+    (s"$result1", s"$result2")
 
 end Solution
 
-case class HeatMap(inputLines: Seq[String]):
-  private val (height: Int, width: Int) = (inputLines.length, inputLines(0).length)
-  val data = inputLines.map(_.toCharArray.map(_.asDigit)).toArray
+def startingCrucible(using CrucibleConstraints, Dimension): Seq[(Long, Crucible)] =
+  summon[CrucibleConstraints] match
+    case CrucibleConstraints.Part1 => Seq((0L, Crucible.init(Left2Right)))
+    case _ => Seq((0L, Crucible.init(Left2Right)), (0L, Crucible.init(Up2Down)))
 
-  private def getSummits(summitsGetter: (Int, Int, Int) => List[Summit]): Seq[Summit] =
-    (for
-      row <- 0 until height
-      col <- 0 until width
-    yield
-      summitsGetter.apply(row, col, data(row)(col))
-      ).flatten
+case class CrucibleConstraints(maxStepsInOneDirection: Int, minStepsInOneDirection: Int)
 
-  lazy val getSummitsPart1: Seq[Summit] = getSummits(allSummitsFromPart1)
+object CrucibleConstraints:
+  val Part1: CrucibleConstraints = CrucibleConstraints(maxStepsInOneDirectionPart1, minStepsInOneDirectionPart1)
+  val Part2: CrucibleConstraints = CrucibleConstraints(maxStepsInOneDirectionPart2, minStepsInOneDirectionPart2)
 
-  lazy val getSummitsPart2: Seq[Summit] = getSummits(allSummitsFromPart2)
+case class Position(x: Int, y: Int)(using dimension: Dimension):
+  private inline def exists: Option[Position] = Option.when(x >= 0 && x < dimension._1 && y >=0 && y < dimension._2)(this)
+  @targetName("add")
+  def +(dir: Direction): Option[Position] =
+    (dir match
+      case Left2Right => this.copy(x = x + 1)
+      case Right2Left => this.copy(x = x - 1)
+      case Up2Down => this.copy(y = y + 1)
+      case Down2Up => this.copy(y = y - 1)
+      ).exists
 
-  def isDefinedAt(row: Int, col: Int): Boolean = (row >= 0 && row < height) && (col >= 0 && col < width)
-  def getHeat(row: Int, col: Int): Int = data(row)(col)
+case class Crucible(position: Position, lastDir: Direction, lastDirCounter: Int)(using dimension: Dimension, crucibleConstraints: CrucibleConstraints):
+  private def nextStep(newDir: Direction): Option[Crucible] =
+    def dirCounter: Int = if (newDir == lastDir) then lastDirCounter + 1 else 1
+    (position + newDir).map(newPos => Crucible(newPos, newDir, dirCounter))
 
-  private def allSummitsFromPart1(row: Int, col: Int, value: Int): List[Summit] =
-    Direction.values.toList.flatMap:
-      currentDir =>
-        (0 to maxStepsInOneDirectionPart1).map:
-          step => Summit(row, col, value, currentDir, step)
+  lazy val turn90CW: Option[Crucible] = nextStep(lastDir.turnCW)
+  lazy val turn90CCW: Option[Crucible] = nextStep(lastDir.turnCCW)
+  lazy val forward: Option[Crucible] = nextStep(lastDir)
 
-  private def allSummitsFromPart2(row: Int, col: Int, value: Int): List[Summit] =
-    Direction.values.toList.flatMap:
-      currentDir =>
-        (0 to maxStepsInOneDirectionPart2).map:
-          step => Summit(row, col, value, currentDir, step)
+  lazy val andMore: Set[Crucible] =
+    if (lastDirCounter >= crucibleConstraints.minStepsInOneDirection)
+      (lastDirCounter to crucibleConstraints.maxStepsInOneDirection).map(value => this.copy(lastDirCounter = value)).toSet
+    else
+      Set(this)
+
+  def next: Seq[Crucible] =
+    lastDirCounter match
+      case value if value < crucibleConstraints.minStepsInOneDirection => Seq(forward).flatten
+      case value if value < crucibleConstraints.maxStepsInOneDirection => Seq(turn90CCW, turn90CW, forward).flatten
+      case _ => Seq(turn90CCW, turn90CW).flatten
+
+object Crucible:
+  given ordering: Ordering[Crucible] = Ordering.by(nav => (-nav.position.x, -nav.position.y, nav.lastDirCounter, nav.lastDir.ordinal))
+  def init(direction: Direction)(using CrucibleConstraints, Dimension): Crucible = Crucible(Position(0, 0), direction, 0)
+
+@tailrec
+def heatLoss(toExplore: TreeSet[(Long, Crucible)], forbidden: Set[Crucible], goal: Position)(using dimension: Dimension, heatMapper: HeatMapper, crucibleConstraints: CrucibleConstraints): Long =
+  toExplore match
+    case empty if empty.isEmpty => 0
+    case notEmpty =>
+      val (head, tail) = (toExplore.head, toExplore.tail)
+      if (forbidden.contains(head._2))
+        heatLoss(tail, forbidden, goal)
+      else
+        val currentHeatLoss = head._1
+        if (head._2.position == goal && head._2.lastDirCounter >= crucibleConstraints.minStepsInOneDirection)
+          currentHeatLoss
+        else
+          heatLoss(tail ++ head._2.next.map(newPosition => (currentHeatLoss + heatMapper.apply(newPosition.position), newPosition)), forbidden ++ head._2.andMore, goal)
+
+enum Direction:
+  case Left2Right, Up2Down, Right2Left, Down2Up
+
+  def turnCW: Direction = Direction.fromOrdinal((ordinal + 1) % Direction.values.length)
+  def turnCCW: Direction = Direction.fromOrdinal((ordinal + 3) % Direction.values.length)
+
+export Direction.*
