@@ -1,34 +1,55 @@
 
-import scala.concurrent.Future
 import scala.concurrent.Await
 import org.apache.pekko
 import pekko.util.Timeout
 import concurrent.duration.DurationInt
 
+enum Method:
+  case withPekko, withStoer
+
+val chooseSolution: Method = Method.withPekko
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val wirebox = WireBox.from(inputLines)
+    val result1 = chooseSolution match
+      case Method.withPekko => solveWithPekko(inputLines)
+      case _ => solve(inputLines)
 
-    import concurrent.ExecutionContext.Implicits.global
-    val futureResultPart1 = PekkoLauncher.runThroughPekko(wirebox)(using timeout = 120.seconds).map:
-      nbOnOneSide =>
-        val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
-        nbOnOtherSide * nbOnOneSide
-
-    val resultPart1 =
-      try {
-        Await.result(futureResultPart1, 110.seconds).toString
-      } catch
-        case exception: Exception => "Not found within time limit"
-
-
-    val result1 = s"${resultPart1}"
     val result2 = s"Happy Christmas"
 
-    (s"${result1}", s"${result2}")
+    (s"$result1", s"$result2")
 
-end Solution
+def solve(inputLines: Seq[String]): String =
+  val edges =
+    inputLines.collect:
+      case s"$source: $destinations" =>
+        destinations.split(" ").map(dest => Edge(Set(Vertice(dest), Vertice(source)), 1))
+    .flatten
+
+  val graph = Graph(edges.toSet)
+
+  val resultPart1 = minCut(graph)
+
+  s"${(graph.vertices.size-resultPart1._2) * resultPart1._2}"
+
+def solveWithPekko(inputLines: Seq[String]): String =
+  val wirebox = WireBox.from(inputLines)
+
+  import concurrent.ExecutionContext.Implicits.global
+  val futureResultPart1 = PekkoLauncher.runThroughPekko(wirebox)(using timeout = 120.seconds).map:
+    nbOnOneSide =>
+      val nbOnOtherSide = wirebox.nbOfEdges - nbOnOneSide
+      nbOnOtherSide * nbOnOneSide
+
+  val resultPart1 =
+    try {
+      Await.result(futureResultPart1, 110.seconds).toString
+    } catch
+      case exception: Exception => "Not found within time limit"
+
+  resultPart1
+
 
 case class WireBox(wires: Seq[Wire[_]]):
   def nbOfEdges = wires.flatMap(_.ends).distinct.size

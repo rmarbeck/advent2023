@@ -15,7 +15,6 @@ case class Edge(vertices: Set[Vertice], weight: Int):
       case head :: Nil => Some(head)
       case _ => None
 
-
   def contains(vertice: Vertice): Boolean = vertices.contains(vertice)
   def contains(vertice1: Vertice, vertice2: Vertice): Boolean = contains(vertice1) && contains(vertice2)
 
@@ -49,14 +48,13 @@ class Graph(val edges: Set[Edge]):
 
 
 @tailrec
-def minCut(graph: Graph, vertice: Vertice, minimum: Int = Int.MaxValue): (Int, Int) =
-  val before = System.currentTimeMillis
+def minCut(graph: Graph): (Int, Int) =
+  val vertice = graph.vertices.head
   minCutPhase(graph, vertice) match
     case (last, 3, reducedGraph) =>
       (3, last.generations.length)
     case (_, cutOffPhase, reducedGraph) =>
-      println(s"$cutOffPhase = ${System.currentTimeMillis - before}ms")
-      minCut(reducedGraph, vertice, Math.min(minimum, cutOffPhase))
+      minCut(reducedGraph)
 
 def minCutPhase(graph: Graph, vertice: Vertice): (Vertice, Int, Graph) =
   @tailrec
