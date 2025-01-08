@@ -7,7 +7,7 @@ import concurrent.duration.DurationInt
 enum Method:
   case withPekko, withStoer
 
-val chooseSolution: Method = Method.withPekko
+val chooseSolution: Method = Method.withStoer
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -52,7 +52,7 @@ def solveWithPekko(inputLines: Seq[String]): String =
 
 
 case class WireBox(wires: Seq[Wire[_]]):
-  def nbOfEdges = wires.flatMap(_.ends).distinct.size
+  def nbOfEdges: Int = wires.flatMap(_.ends).distinct.size
 
 object WireBox:
   def from(input: Seq[String]): WireBox =
@@ -66,7 +66,7 @@ object WireBox:
           yield
             Wire(Set(firstComponent, otherComponent))
 
-    WireBox(input.map(from).flatten)
+    WireBox(input.flatMap(from))
 
 case class Component(name: String)
 
