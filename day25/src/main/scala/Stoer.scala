@@ -1,25 +1,25 @@
 import scala.annotation.{tailrec, targetName}
 import scala.collection.immutable.{BitSet, TreeSet}
 
-case class Vertice(id: Int, generations: Int):
-  def mergeIn(otherVertice: Vertice): Vertice =
-    this.copy(generations = otherVertice.generations + generations)
+case class Vertex(id: Int, generations: Int):
+  def mergeIn(otherVertex: Vertex): Vertex =
+    this.copy(generations = otherVertex.generations + generations)
 
-object Vertice:
-  def apply(asString: String): Vertice = new Vertice(asString.hashCode, 1)
+object Vertex:
+  def apply(asString: String): Vertex = new Vertex(asString.hashCode, 1)
 
-case class Edge(vertices: Set[Vertice], weight: Long):
+case class Edge(vertices: Set[Vertex], weight: Long):
   lazy val head : Int = vertices.head.id
   lazy val last : Int = vertices.last.id
-  def onlyOneIsIn(toLookIn: Set[Vertice]): Boolean = toLookIn(vertices.head) ^ toLookIn(vertices.last)
-  def bothIn(toLookIn: Set[Vertice]): Boolean = toLookIn(vertices.head) && toLookIn(vertices.last)
-  def theOnlyOneIn(toLookIn: Set[Vertice]): Option[Vertice] =
+  def onlyOneIsIn(toLookIn: Set[Vertex]): Boolean = toLookIn(vertices.head) ^ toLookIn(vertices.last)
+  def bothIn(toLookIn: Set[Vertex]): Boolean = toLookIn(vertices.head) && toLookIn(vertices.last)
+  def theOnlyOneIn(toLookIn: Set[Vertex]): Option[Vertex] =
     Seq(Option.when(toLookIn(vertices.head))(vertices.head), Option.when(toLookIn(vertices.last))(vertices.last)).flatten match
       case head :: Nil => Some(head)
       case _ => None
 
-  def contains(vertice: Vertice): Boolean = vertices.contains(vertice)
-  def contains(vertice1: Vertice, vertice2: Vertice): Boolean = contains(vertice1) && contains(vertice2)
+  def contains(vertex: Vertex): Boolean = vertices.contains(vertex)
+  def contains(vertex1: Vertex, vertex2: Vertex): Boolean = contains(vertex1) && contains(vertex2)
 
   def toSeqOfMap: Seq[(Int,Map[Int, Long])] = Seq(head -> Map(last -> weight), last -> Map(head -> weight))
 
@@ -40,21 +40,21 @@ object Connections:
 
 
 class Graph(val edges: Set[Edge]):
-  def verticeFromId(id: Int): Vertice = verticesMap(id)
+  def verticesFromId(id: Int): Vertex = verticesMap(id)
   lazy val optimizedEdges: Map[Int, Connections] =
     edges.flatMap:
       _.toSeqOfMap
     .groupMapReduce(_._1)(_._2)(_ ++ _).map((k, v) => k -> Connections.fromWeights(v))
 
-  val vertices: Set[Vertice] = edges.flatMap(_.vertices)
-  val verticesMap: Map[Int, Vertice] = vertices.map(v => v.id -> v).toMap
+  val vertices: Set[Vertex] = edges.flatMap(_.vertices)
+  val verticesMap: Map[Int, Vertex] = vertices.map(v => v.id -> v).toMap
   val length: Int = vertices.size
 
-  def weightOf(vertice: Vertice): Long =
+  def weightOf(vertice: Vertex): Long =
     edges.toSeq.collect:
       case edge@ Edge(_, weight) if edge.contains(vertice) => weight
     .sum
-  def merge(verticeToMerge: Vertice, verticeToMergeIn: Vertice): Graph =
+  def merge(verticeToMerge: Vertex, verticeToMergeIn: Vertex): Graph =
     val (untouchedEdges, touched) = edges.partition(edge => !edge.contains(verticeToMerge) && !edge.contains(verticeToMergeIn))
     val newVertice = verticeToMerge.mergeIn(verticeToMergeIn)
     val merged =
@@ -66,44 +66,63 @@ class Graph(val edges: Set[Edge]):
 
 
 
-case class Weight(id: Int, value: Long):
+class Weight(val id: Int, val value: Long):
   def toTuple: (Int, Long) = (id, value)
   def toTuple2: (Int, Weight) = (id, this)
-  def +(other: Weight): Weight =
-    this.copy(value = this.value + other.value)
+  def +(other: Weight): Weight = Weight(id, this.value + other.value)
+
+  override def hashCode(): Int = id
+
+  override def equals(obj: Any): Boolean =
+    println("here")
+    obj match
+      case that: Weight => id == that.id
+      case _ => false
+
+  override def toString: String = s"Weight(${id}, ${value})"
 
 object Weight:
   def fromTuple(tuple: (Int, Long)): Weight = Weight(tuple._1, tuple._2)
-
   given orderingWeight: Ordering[Weight] = Ordering.by(w => (-w.value, w.id))
 
 @tailrec
 def minCut(graph: Graph): (Int, Int) =
-  val vertice = graph.vertices.head
-  minCutPhase(graph, vertice) match
+  val vertex = graph.vertices.head
+  minCutPhase(graph, vertex) match
     case (last, 3L, reducedGraph) =>
       (3, last.generations)
     case (_, cutOffPhase, reducedGraph) =>
       minCut(reducedGraph)
 
-extension [A](self: TreeSet[A])
-  def mergeWith(newMap: Map[Int, A], withConstraint: BitSet): TreeSet[A] = ???
+case class WeightsHeap(weights: Map[Int, Long], heap: TreeSet[Weight]):
+  def add(newWeight: Weight): WeightsHeap =
+    weights.get(newWeight.id) match
+      case Some(existingWeight) =>
+        WeightsHeap(weights + (newWeight.id -> (existingWeight + newWeight.value)), heap - Weight(newWeight.id, existingWeight) + Weight(newWeight.id, existingWeight + newWeight.value))
+      case _ =>
+        WeightsHeap(weights + (newWeight.id -> newWeight.value), heap + Weight(newWeight.id, newWeight.value))
+
+  def tail: WeightsHeap =
+    val best = heap.head
+    WeightsHeap(weights - best.id, heap.tail)
+
+object WeightsHeap:
+  val empty: WeightsHeap = WeightsHeap(Map(), TreeSet())
 
 
-def minCutPhase(graph: Graph, vertice: Vertice): (Vertice, Long, Graph) =
+def minCutPhase(graph: Graph, vertex: Vertex): (Vertex, Long, Graph) =
   @tailrec
-  def findLastAdded(inA: Seq[Int], inABitSet: BitSet, weights: TreeSet[Weight]): (Vertice, Vertice) =
+  def findLastAdded(inA: Seq[Int], inABitSet: BitSet, heap: WeightsHeap): (Vertex, Vertex) =
     inA.size == graph.length match
-      case true => (graph.verticeFromId(inA.head), graph.verticeFromId(inA.tail.head))
+      case true => (graph.verticesFromId(inA.head), graph.verticesFromId(inA.tail.head))
       case false =>
         val lastAddedInA = inA.head
-        val newWeights = TreeSet(
-          (graph.optimizedEdges(lastAddedInA).onlyNotIN(inABitSet) ++ weights.view)
-            .groupMapReduce(_.id)(identity)(_ + _).values.toSeq:_*)
-        val newBest = newWeights.head.id
-        findLastAdded(newBest +: inA, inABitSet + newBest, newWeights.tail)
+        val newHeap =
+          graph.optimizedEdges(lastAddedInA).onlyNotIN(inABitSet).foldLeft(heap):
+            case (acc, weight) => acc.add(weight)
 
-  //val before = System.currentTimeMillis()
-  val (last, justBefore) = findLastAdded(Seq(vertice.id), BitSet() + vertice.id, TreeSet())
-  //println(s"Time elapsed: ${System.currentTimeMillis() - before}ms")
+        val newBest = newHeap.heap.head.id
+        findLastAdded(newBest +: inA, inABitSet + newBest, newHeap.tail)
+
+  val (last, justBefore) = findLastAdded(Seq(vertex.id), BitSet() + vertex.id, WeightsHeap.empty)
   (last, graph.weightOf(last), graph.merge(last, justBefore))

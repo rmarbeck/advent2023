@@ -24,7 +24,7 @@ def solve(inputLines: Seq[String]): String =
   val edges =
     inputLines.collect:
       case s"$source: $destinations" =>
-        destinations.split(" ").map(dest => Edge(Set(Vertice(dest), Vertice(source)), 1))
+        destinations.split(" ").map(dest => Edge(Set(Vertex(dest), Vertex(source)), 1))
     .flatten
 
   val graph = Graph(edges.toSet)
