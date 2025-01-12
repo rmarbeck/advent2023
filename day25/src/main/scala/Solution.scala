@@ -21,11 +21,17 @@ object Solution:
     (s"$result1", s"$result2")
 
 def solve(inputLines: Seq[String]): String =
-  val edges =
-    inputLines.collect:
+  val vertices =
+    inputLines.toSet.flatMap:
       case s"$source: $destinations" =>
-        destinations.split(" ").map(dest => Edge(Set(Vertex(dest), Vertex(source)), 1))
-    .flatten
+        destinations.split(" ").toSet + source
+
+  val verticesMap = vertices.zipWithIndex.map((v, id) => v -> id).toMap
+
+  val edges =
+    inputLines.flatMap:
+      case s"$source: $destinations" =>
+        destinations.split(" ").map(dest => Edge(Set(Vertex(verticesMap(dest)), Vertex(verticesMap(source))), 1))
 
   val graph = Graph(edges.toSet)
 

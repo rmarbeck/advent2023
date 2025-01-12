@@ -1,7 +1,7 @@
 import scala.annotation.{tailrec, targetName}
 import scala.collection.immutable.{BitSet, TreeSet}
 
-case class Vertex(id: Int, generations: Int):
+case class Vertex(id: Int, generations: Int = 1):
   def mergeIn(otherVertex: Vertex): Vertex =
     this.copy(generations = otherVertex.generations + generations)
 
@@ -28,7 +28,7 @@ case class Connections(verticesTo: BitSet, weights: Map[Int, Weight]):
 
 object Connections:
   def fromWeights(weights: Map[Int, Long]): Connections =
-    val verticesTo = BitSet(weights.keys.toSeq:_*)
+    val verticesTo = BitSet.fromSpecific(weights.keys)
     new Connections(verticesTo, weights.map((k, v) => k -> Weight(k, v)))
 
 class Graph(val edges: Set[Edge]):
@@ -92,9 +92,8 @@ def minCutPhase(graph: Graph, vertex: Vertex): (Vertex, Long, Graph) =
     inA.size == graph.length match
       case true => (graph.verticesFromId(inA.head), graph.verticesFromId(inA(1)))
       case false =>
-        val lastAddedInA = inA.head
         val newHeap =
-          graph.optimizedEdges(lastAddedInA).onlyNotIN(inABitSet).foldLeft(heap):
+          graph.optimizedEdges(inA.head).onlyNotIN(inABitSet).foldLeft(heap):
             case (acc, weight) => acc.add(weight)
 
         val (head, tail) = (newHeap.head.id, newHeap.tail)
