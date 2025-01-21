@@ -81,7 +81,7 @@ object Graph:
     Graph(verticesMap, oEdges)
 
 case class Weight(id: Int, value: Long):
-  def +(other: Weight) = this.copy(value = this.value + other.value)
+  def +(other: Weight): Weight = this.copy(value = this.value + other.value)
 
 
 object Weight:
