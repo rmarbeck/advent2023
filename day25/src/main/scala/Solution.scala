@@ -31,9 +31,9 @@ def solve(inputLines: Seq[String]): String =
   val edges =
     inputLines.flatMap:
       case s"$source: $destinations" =>
-        destinations.split(" ").map(dest => Edge(Set(Vertex(verticesMap(dest)), Vertex(verticesMap(source))), 1))
+        destinations.split(" ").map(dest => Edge(Set(new Vertex(verticesMap(dest)), new Vertex(verticesMap(source))), 1))
 
-  val graph = Graph(edges.toSet)
+  val graph = Graph.fromEdges(edges.toSet)
 
   val resultPart1 = minCut(graph)
 

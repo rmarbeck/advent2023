@@ -1,62 +1,88 @@
 import scala.annotation.{tailrec, targetName}
 import scala.collection.immutable.{BitSet, TreeSet}
 
-case class Vertex(id: Int, generations: Int = 1):
-  def mergeIn(otherVertex: Vertex): Vertex =
-    this.copy(generations = otherVertex.generations + generations)
+type Id = Int
+type WeightUnit = Int
 
-object Vertex:
-  def apply(asString: String): Vertex = new Vertex(asString.hashCode, 1)
+case class Vertex(id: Id, generations: BitSet):
+  def this(id: Id) = this(id, BitSet(id))
+  def mergeIn(otherVertex: Vertex): Vertex = otherVertex.copy(generations = otherVertex.generations ++ this.generations)
 
-case class Edge(vertices: Set[Vertex], weight: Long):
-  lazy val head : Int = vertices.head.id
-  lazy val last : Int = vertices.last.id
+case class Edge(vertices: Set[Vertex], weight: WeightUnit):
+  lazy val head : Id = vertices.head.id
+  lazy val last : Id = vertices.last.id
 
-  def contains(vertex: Vertex): Boolean = vertices.contains(vertex)
+  def toSeqOfMap: Seq[(Id,Map[Id, WeightUnit])] = Seq(head -> Map(last -> weight), last -> Map(head -> weight))
 
-  def toSeqOfMap: Seq[(Int,Map[Int, Long])] = Seq(head -> Map(last -> weight), last -> Map(head -> weight))
+case class Connections(verticesTo: BitSet, weights: Map[Id, Weight]):
+  def mergeVertices(vertexToMergeId: Id, vertexToMergeInId: Id): Connections =
+    val updatedVertices = verticesTo - vertexToMergeId + vertexToMergeInId
+    val updatedConnections =
+      val weightOfToMerge = weights(vertexToMergeId)
+      val newWeightOfToMergeIn =
+        vertexToMergeInId -> (weights.getOrElse(vertexToMergeInId, Weight(vertexToMergeInId, 0)) + weightOfToMerge)
 
-  @targetName("add")
-  def +(other: Edge): Edge =
-    this.copy(weight = weight + other.weight)
+      (weights + newWeightOfToMergeIn) - vertexToMergeId
 
+    Connections(updatedVertices, updatedConnections)
 
-case class Connections(verticesTo: BitSet, weights: Map[Int, Weight]):
-  def onlyNotIN(exclusion: BitSet): scala.collection.View[Weight] =
-    val toTake = verticesTo diff exclusion
-    toTake.map(key => weights(key)).view
+  def mergeConnectionsWith(connectionsToMergeIn: Connections, vertexToMergeId: Id, vertexToMergeInId: Id): Connections =
+    val updatedVertices = (verticesTo ++ connectionsToMergeIn.verticesTo) - vertexToMergeInId - vertexToMergeId
+    val updatedWeights = weights.foldLeft(connectionsToMergeIn.weights.removed(vertexToMergeId)):
+      case (acc, (vertexTo, _)) if vertexTo == vertexToMergeInId => acc
+      case (acc, (vertexTo, weight)) if connectionsToMergeIn.verticesTo.contains(vertexTo) =>
+        acc + (vertexTo -> (weights(vertexTo) + connectionsToMergeIn.weights(vertexTo)))
+      case (acc, (vertexTo, weight)) =>
+        acc + (vertexTo -> weights(vertexTo))
+
+    Connections(updatedVertices, updatedWeights)
+
+  def onlyNotIN(exclusion: BitSet): scala.collection.View[Weight] = (verticesTo diff exclusion).view.map(key => weights(key))
 
 object Connections:
-  def fromWeights(weights: Map[Int, Long]): Connections =
+  def fromWeights(weights: Map[Int, WeightUnit]): Connections =
     val verticesTo = BitSet.fromSpecific(weights.keys)
     new Connections(verticesTo, weights.map((k, v) => k -> Weight(k, v)))
 
-class Graph(val edges: Set[Edge]):
+type OEdges = Map[Id, Connections]
+type OVertices = Map[Id, Vertex]
+
+class Graph private(val verticesMap: OVertices, val optimizedEdges: OEdges):
+  lazy val vertices: Set[Vertex] = verticesMap.values.toSet
+  lazy val length: Int = vertices.size
   def verticesFromId(id: Int): Vertex = verticesMap(id)
-  lazy val optimizedEdges: Map[Int, Connections] =
-    edges.flatMap:
+
+  def weightOf(vertex: Vertex): Long = optimizedEdges(vertex.id).weights.values.map(_.value).sum
+
+  def merge(vertexToMerge: Vertex, vertexToMergeIn: Vertex): Graph =
+    val newVertex = vertexToMerge.mergeIn(vertexToMergeIn)
+
+    val connectionsOfMerged = optimizedEdges(vertexToMerge.id)
+    val connectionsOfMergedIn = optimizedEdges(vertexToMergeIn.id)
+    val newConnections = connectionsOfMerged.mergeConnectionsWith(connectionsOfMergedIn, vertexToMerge.id, vertexToMergeIn.id)
+
+    val alteredConnections = connectionsOfMerged.verticesTo - vertexToMergeIn.id
+
+    val updatedOptimizedEdges = alteredConnections.foldLeft(optimizedEdges.removed(vertexToMerge.id)):
+      case (acc, vertex) => acc + (vertex -> acc(vertex).mergeVertices(vertexToMerge.id, vertexToMergeIn.id))
+
+    val newOptimizedEdges =  updatedOptimizedEdges + (vertexToMergeIn.id -> newConnections)
+    val newMap = verticesMap.removed(vertexToMerge.id) + (newVertex.id -> newVertex)
+
+    Graph(newMap, newOptimizedEdges)
+
+object Graph:
+  def fromEdges(edges: Set[Edge]): Graph =
+    val verticesMap = edges.flatMap(_.vertices).map(v => v.id -> v).toMap
+    val oEdges = edges.flatMap:
       _.toSeqOfMap
     .groupMapReduce(_._1)(_._2)(_ ++ _).map((k, v) => k -> Connections.fromWeights(v))
 
-  val vertices: Set[Vertex] = edges.flatMap(_.vertices)
-  private val verticesMap: Map[Int, Vertex] = vertices.map(v => v.id -> v).toMap
-  val length: Int = vertices.size
+    Graph(verticesMap, oEdges)
 
-  def weightOf(vertex: Vertex): Long =
-    edges.toSeq.collect:
-      case edge@ Edge(_, weight) if edge.contains(vertex) => weight
-    .sum
-  def merge(vertexToMerge: Vertex, vertexToMergeIn: Vertex): Graph =
-    val (untouchedEdges, touched) = edges.partition(edge => !edge.contains(vertexToMerge) && !edge.contains(vertexToMergeIn))
-    val newVertex = vertexToMerge.mergeIn(vertexToMergeIn)
-    val merged =
-      (touched.toSeq.view.collect:
-        case edge@ Edge(_, weight) if edge.contains(vertexToMerge) && !edge.contains(vertexToMergeIn) => Edge(edge.vertices.filterNot(_ == vertexToMerge) + newVertex, weight)
-        case edge@ Edge(_, weight) if edge.contains(vertexToMergeIn) && !edge.contains(vertexToMerge) => Edge(edge.vertices.filterNot(_ == vertexToMergeIn) + newVertex, weight)
-        ).groupMapReduce(_.vertices)(identity)(_ + _).values
-    Graph(untouchedEdges ++ merged.toSet)
+case class Weight(id: Int, value: Long):
+  def +(other: Weight) = this.copy(value = this.value + other.value)
 
-case class Weight(id: Int, value: Long)
 
 object Weight:
   def fromTuple(tuple: (Int, Long)): Weight = Weight(tuple._1, tuple._2)
@@ -66,7 +92,7 @@ object Weight:
 def minCut(graph: Graph): (Int, Int) =
   val a = graph.vertices.head
   minCutPhase(graph, a) match
-    case (last, 3L, reducedGraph) => (3, last.generations)
+    case (last, 3L, reducedGraph) => (3, last.generations.size)
     case (_, cutOffPhase, reducedGraph) => minCut(reducedGraph)
 
 case class WeightsHeap(weights: Map[Int, Long], heap: TreeSet[Weight]):
@@ -89,7 +115,7 @@ type LastTwo = (Vertex, Vertex)
 def minCutPhase(graph: Graph, vertex: Vertex): (Vertex, Long, Graph) =
   @tailrec
   def findLastAdded(inA: Seq[Int], inABitSet: BitSet, heap: WeightsHeap): LastTwo =
-    inA.size == graph.length match
+    inABitSet.size == graph.length match
       case true => (graph.verticesFromId(inA.head), graph.verticesFromId(inA(1)))
       case false =>
         val newHeap =
