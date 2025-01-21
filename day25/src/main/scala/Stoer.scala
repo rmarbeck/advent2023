@@ -5,8 +5,10 @@ type Id = Int
 type WeightUnit = Int
 
 case class Vertex(id: Id, generations: BitSet):
-  def this(id: Id) = this(id, BitSet(id))
   def mergeIn(otherVertex: Vertex): Vertex = otherVertex.copy(generations = otherVertex.generations ++ this.generations)
+
+object Vertex:
+  def apply(id: Id): Vertex = new Vertex(id, BitSet(id))
 
 case class Edge(vertices: Set[Vertex], weight: WeightUnit):
   lazy val head : Id = vertices.head.id
@@ -15,6 +17,7 @@ case class Edge(vertices: Set[Vertex], weight: WeightUnit):
   def toSeqOfMap: Seq[(Id,Map[Id, WeightUnit])] = Seq(head -> Map(last -> weight), last -> Map(head -> weight))
 
 case class Connections(verticesTo: BitSet, weights: Map[Id, Weight]):
+  lazy val totalWeight: WeightUnit = weights.values.map(_.value).sum
   def mergeVertices(vertexToMergeId: Id, vertexToMergeInId: Id): Connections =
     val updatedVertices = verticesTo - vertexToMergeId + vertexToMergeInId
     val updatedConnections =
@@ -52,7 +55,7 @@ class Graph private(val verticesMap: OVertices, val optimizedEdges: OEdges):
   lazy val length: Int = vertices.size
   def verticesFromId(id: Int): Vertex = verticesMap(id)
 
-  def weightOf(vertex: Vertex): Long = optimizedEdges(vertex.id).weights.values.map(_.value).sum
+  def weightOf(vertex: Vertex): WeightUnit = optimizedEdges(vertex.id).totalWeight
 
   def merge(vertexToMerge: Vertex, vertexToMergeIn: Vertex): Graph =
     val newVertex = vertexToMerge.mergeIn(vertexToMergeIn)
@@ -80,22 +83,22 @@ object Graph:
 
     Graph(verticesMap, oEdges)
 
-case class Weight(id: Int, value: Long):
+case class Weight(id: Int, value: WeightUnit):
   def +(other: Weight): Weight = this.copy(value = this.value + other.value)
 
 
 object Weight:
-  def fromTuple(tuple: (Int, Long)): Weight = Weight(tuple._1, tuple._2)
+  def fromTuple(tuple: (Int, WeightUnit)): Weight = Weight(tuple._1, tuple._2)
   given orderingWeight: Ordering[Weight] = Ordering.by(w => (-w.value, w.id))
 
 @tailrec
 def minCut(graph: Graph): (Int, Int) =
   val a = graph.vertices.head
   minCutPhase(graph, a) match
-    case (last, 3L, reducedGraph) => (3, last.generations.size)
+    case (last, 3, reducedGraph) => (3, last.generations.size)
     case (_, cutOffPhase, reducedGraph) => minCut(reducedGraph)
 
-case class WeightsHeap(weights: Map[Int, Long], heap: TreeSet[Weight]):
+case class WeightsHeap(weights: Map[Int, WeightUnit], heap: TreeSet[Weight]):
   inline def add(newWeight: Weight): WeightsHeap =
     val Weight(id, weight) = newWeight
     weights.get(id) match
@@ -110,20 +113,20 @@ case class WeightsHeap(weights: Map[Int, Long], heap: TreeSet[Weight]):
 object WeightsHeap:
   val empty: WeightsHeap = WeightsHeap(Map.empty, TreeSet.empty)
 
-type LastTwo = (Vertex, Vertex)
+type LastTwo = Seq[Vertex]
 
-def minCutPhase(graph: Graph, vertex: Vertex): (Vertex, Long, Graph) =
+def minCutPhase(graph: Graph, vertex: Vertex): (Vertex, WeightUnit, Graph) =
   @tailrec
-  def findLastAdded(inA: Seq[Int], inABitSet: BitSet, heap: WeightsHeap): LastTwo =
-    inABitSet.size == graph.length match
-      case true => (graph.verticesFromId(inA.head), graph.verticesFromId(inA(1)))
-      case false =>
-        val newHeap =
-          graph.optimizedEdges(inA.head).onlyNotIN(inABitSet).foldLeft(heap):
-            case (acc, weight) => acc.add(weight)
+  def findLastAdded(A: Seq[Int], ABitSet: BitSet, heap: WeightsHeap): LastTwo =
+    if ABitSet.size == graph.length then
+      A.take(2).map(graph.verticesFromId)
+    else
+      val newHeap =
+        graph.optimizedEdges(A.head).onlyNotIN(ABitSet).foldLeft(heap):
+          case (acc, weight) => acc.add(weight)
 
-        val (head, tail) = (newHeap.head.id, newHeap.tail)
-        findLastAdded(head +: inA, inABitSet + head, tail)
+      val (head, tail) = (newHeap.head.id, newHeap.tail)
+      findLastAdded(head +: A, ABitSet + head, tail)
 
-  val (last, justBefore) = findLastAdded(Seq(vertex.id), BitSet(vertex.id), WeightsHeap.empty)
+  val Seq(last, justBefore) = findLastAdded(Seq(vertex.id), BitSet(vertex.id), WeightsHeap.empty)
   (last, graph.weightOf(last), graph.merge(last, justBefore))
