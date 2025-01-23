@@ -11,14 +11,56 @@ object Solution:
 
     val result1 =
       given Context = Context.fromInputPart1(inputLines)
-      solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
+      findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)), Vertex(0, Summit.target))).toList.sortBy(_.id)
+      //solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
+
+    println("-------------------")
 
     val result2 =
-      given Context = Context.fromInputPart2  (inputLines)
-      solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
+      given Context = Context.fromInputPart2(inputLines)
+      findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)))).toList.sortBy(_.id)
+      //solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
 
 
     (s"$result1", s"$result2")
+
+type Id = Int
+
+case class Vertex(id: Id, summit: Summit)
+
+case class VerticesPath(distance: Int, currentSummit: Summit, lastVertex: Vertex)(using context: Context):
+  def shortcut: Boolean = lastVertex.summit == currentSummit
+  def newVertex(vertex: Vertex): VerticesPath = this.copy(distance = 0, lastVertex = vertex)
+  def walk: VerticesPath = this.copy(distance = distance + 1)
+  def next: Seq[VerticesPath] =
+    context.grid.nextCached(currentSummit).map(summit => VerticesPath(distance+1, summit, lastVertex))
+
+object VerticesPath:
+  def init(using Context): VerticesPath = VerticesPath(0, Summit(1, 0), Vertex(1, Summit(1, 0)))
+
+def findVertices(toExplore: List[VerticesPath], explored: BitSet, vertices: Set[Vertex])(using context:Context): Set[Vertex] =
+  toExplore match
+    case Nil => vertices
+    case head :: tail if explored.contains(head.currentSummit.asInt) => findVertices(tail, explored, vertices)
+    case head :: tail =>
+      head.next.filterNot(vpath => explored.contains(vpath.currentSummit.asInt)).toList match
+        case Nil =>
+          val foundVertex = head.next.filter(vpath => vertices.map(_.summit).contains(vpath.currentSummit)).filterNot(_.shortcut)
+          if (foundVertex.nonEmpty)
+            println(s"# : $head  => ${foundVertex(0).currentSummit} -> ${head.lastVertex.summit} (${head.distance})")
+            //println(s"In Nil => $foundVertex")
+          findVertices(tail, explored + head.currentSummit.asInt, vertices)
+        case onlyOne :: Nil => findVertices(onlyOne :: tail, explored + head.currentSummit.asInt, vertices)
+        case several if vertices.map(_.summit).contains(head.currentSummit) =>
+          println(s"# : $head  => ${head.currentSummit}")
+          findVertices(several ::: tail, explored + head.currentSummit.asInt, vertices)
+        case several =>
+          println(s"2 : $head  => ${head.currentSummit} -> ${head.lastVertex.summit} (${head.distance})")
+          val newVertex = Vertex(vertices.size + 1, head.currentSummit)
+          findVertices(several.map(_.newVertex(newVertex)) ::: tail, explored + head.currentSummit.asInt, vertices + newVertex)
+
+
+
 
 case class Context(grid: Grid, dimension: Dimension, target: Target)
 
@@ -39,6 +81,14 @@ object Context:
 
 
 class Grid(private val arrayOfVals: Array[Array[Char]]):
+  def getSummits(using context:Context): Seq[Summit] =
+    for
+      x <- arrayOfVals.indices
+      y <- arrayOfVals(x).indices
+      if arrayOfVals(x)(y) != '#'
+    yield
+      Summit(x, y)
+
   lazy val size: Int = arrayOfVals.length
   val cachedNext : mutable.Map[Summit, Seq[Summit]] = mutable.Map.empty
 
@@ -64,6 +114,7 @@ class Grid(private val arrayOfVals: Array[Array[Char]]):
     nextValid(atMost)
 
 case class Summit(x: Int, y: Int)(using context:Context):
+  def distance(other: Summit) = (other.x - x).abs + (other.y - y).abs
   lazy val asInt: Int = (x + 1)*context.dimension + (y + 1)
   private val (targetX, targetY) = context.target
   lazy val distanceToTarget: Int = (targetX - x).abs + (targetY - y).abs
