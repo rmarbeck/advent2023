@@ -1,5 +1,5 @@
 import scala.annotation.tailrec
-import scala.collection.immutable.{BitSet, TreeSet}
+import scala.collection.immutable.{BitSet, TreeSet, Map as iMap}
 import scala.collection.mutable
 import scala.collection.mutable.Map
 
@@ -9,26 +9,41 @@ type Target = (Int, Int)
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val result1 =
+    val result1 = 0
       given Context = Context.fromInputPart1(inputLines)
-      findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)), Vertex(0, Summit.target))).toList.sortBy(_.id)
-      //solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
+      val edges = findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)), Vertex(0, Summit.target)), Set(), Set())._2
+      given graph: Graph = Graph(edges)
+      println(solverExp(TreeSet(NewPath(0, graph.start, BitSet())), graph.target.summit, None))
 
-    println("-------------------")
 
     val result2 =
       given Context = Context.fromInputPart2(inputLines)
-      findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)))).toList.sortBy(_.id)
-      //solver(TreeSet(Path.from(Summit(1, 0))), Summit.target).get.toString
+      val edges = findVertices(List(VerticesPath.init), BitSet(), Set(Vertex(1, Summit(1, 0)), Vertex(0, Summit.target)), Set(), Set())._2
+      //edges.toList.sortBy(_.lowestId).foreach(println)
+      given graph: Graph = Graph(edges)
+
+      println(solverExp(TreeSet(NewPath(0, graph.start, BitSet())), graph.target.summit, None))
 
 
     (s"$result1", s"$result2")
 
 type Id = Int
+type WeightUnit = Int
 
 case class Vertex(id: Id, summit: Summit)
 
+case class Edge(vertices: Set[Vertex], weight: WeightUnit):
+  lazy val lowestId: Id = math.min(head, last)
+  lazy val head : Id = vertices.head.id
+  lazy val last : Id = vertices.last.id
+
+  def toSeqOfMap: Seq[(Id,Seq[(Id, WeightUnit)])] = Seq(head -> Seq(last -> weight), last -> Seq(head -> weight))
+
+object Edge:
+  def apply(vertex1: Vertex, vertex2: Vertex, weight: WeightUnit): Edge = new Edge(Set(vertex1, vertex2), weight)
+
 case class VerticesPath(distance: Int, currentSummit: Summit, lastVertex: Vertex)(using context: Context):
+  lazy val summitId: Int = currentSummit.asInt
   def shortcut: Boolean = lastVertex.summit == currentSummit
   def newVertex(vertex: Vertex): VerticesPath = this.copy(distance = 0, lastVertex = vertex)
   def walk: VerticesPath = this.copy(distance = distance + 1)
@@ -36,29 +51,81 @@ case class VerticesPath(distance: Int, currentSummit: Summit, lastVertex: Vertex
     context.grid.nextCached(currentSummit).map(summit => VerticesPath(distance+1, summit, lastVertex))
 
 object VerticesPath:
-  def init(using Context): VerticesPath = VerticesPath(0, Summit(1, 0), Vertex(1, Summit(1, 0)))
+  def init(using Context): VerticesPath = VerticesPath(-1, Summit(1, 0), Vertex(1, Summit(1, 0)))
 
-def findVertices(toExplore: List[VerticesPath], explored: BitSet, vertices: Set[Vertex])(using context:Context): Set[Vertex] =
+@tailrec
+def findVertices(toExplore: List[VerticesPath], explored: BitSet, vertices: Set[Vertex], edgesPart1: Set[Edge], edgesPart2: Set[Edge])(using context:Context): (Set[Edge], Set[Edge]) =
   toExplore match
-    case Nil => vertices
-    case head :: tail if explored.contains(head.currentSummit.asInt) => findVertices(tail, explored, vertices)
+    case Nil => (edgesPart1, edgesPart2)
+    case head :: tail if explored.contains(head.summitId) => findVertices(tail, explored, vertices, edgesPart1, edgesPart2)
     case head :: tail =>
-      head.next.filterNot(vpath => explored.contains(vpath.currentSummit.asInt)).toList match
-        case Nil =>
-          val foundVertex = head.next.filter(vpath => vertices.map(_.summit).contains(vpath.currentSummit)).filterNot(_.shortcut)
-          if (foundVertex.nonEmpty)
-            println(s"# : $head  => ${foundVertex(0).currentSummit} -> ${head.lastVertex.summit} (${head.distance})")
-            //println(s"In Nil => $foundVertex")
-          findVertices(tail, explored + head.currentSummit.asInt, vertices)
-        case onlyOne :: Nil => findVertices(onlyOne :: tail, explored + head.currentSummit.asInt, vertices)
-        case several if vertices.map(_.summit).contains(head.currentSummit) =>
-          println(s"# : $head  => ${head.currentSummit}")
-          findVertices(several ::: tail, explored + head.currentSummit.asInt, vertices)
-        case several =>
-          println(s"2 : $head  => ${head.currentSummit} -> ${head.lastVertex.summit} (${head.distance})")
-          val newVertex = Vertex(vertices.size + 1, head.currentSummit)
-          findVertices(several.map(_.newVertex(newVertex)) ::: tail, explored + head.currentSummit.asInt, vertices + newVertex)
+      val next = head.next
 
+      next.filterNot(path => explored.contains(path.summitId)).toList match
+        case Nil =>
+          val pathThroughVertex = next.filter(path => vertices.map(_.summit).contains(path.currentSummit)).filterNot(_.shortcut)
+          val (newEdgesPart1, newEdgesPart2) = pathThroughVertex match
+            case onlyOne :: Nil =>
+              (edgesPart1 + Edge(onlyOne.lastVertex, vertices.find(_.summit == onlyOne.currentSummit).get, onlyOne.distance + 1)
+                ,
+                edgesPart2 + Edge(onlyOne.lastVertex, vertices.find(_.summit == onlyOne.currentSummit).get, onlyOne.distance + 1))
+            case _ =>
+              if (vertices.find(_.id == 0).map(_.summit).contains(head.currentSummit))
+                (edgesPart1 + Edge(head.lastVertex, vertices.find(_.summit == head.currentSummit).get, head.distance + 1),
+                  edgesPart2 + Edge(head.lastVertex, vertices.find(_.summit == head.currentSummit).get, head.distance + 1))
+              else
+                (edgesPart1, edgesPart2)
+
+          findVertices(tail, explored + head.summitId, vertices, newEdgesPart1, newEdgesPart2)
+        case onlyOne :: Nil => findVertices(onlyOne :: tail, explored + head.summitId, vertices, edgesPart1, edgesPart2)
+        case several =>
+          val newVertex = Vertex(vertices.size, head.currentSummit)
+          val newEdgesPart1 = edgesPart1 + Edge(head.lastVertex, newVertex, head.distance + 1)
+          val newEdgesPart2 = edgesPart2 + Edge(head.lastVertex, newVertex, head.distance + 1)
+          //println(s"here : ${Edge(head.lastVertex, newVertex, head.distance + 1)}")
+          findVertices(several.map(_.newVertex(newVertex)) ::: tail, explored + head.summitId, vertices + newVertex, newEdgesPart1, newEdgesPart2)
+
+class Graph(edges: Set[Edge]):
+  val lookup: iMap[Id, Vertex] = edges.flatMap(_.vertices).map(vertex => vertex.id -> vertex).toMap
+  private val optimizedEdges: iMap[Id, Seq[(Id, WeightUnit)]] =
+    val test = edges.flatMap(_.toSeqOfMap)
+    val test2 = test.groupMapReduce(_._1)(_._2)(_ ++ _)
+    test2
+  val start: Vertex = lookup(1)
+  val target: Vertex = lookup(0)
+  /*println("******")
+  println(lookup)
+  println(edges)
+  println(s"sum : ${edges.map(_.weight).sum}")
+  println(optimizedEdges(0).map((id, weight) => (lookup(id), weight)))
+  println("------")*/
+  def isConnectedToTarget(vertex: Vertex): Boolean = optimizedEdges(vertex.id).map(_._1).contains(0)
+  def connectedVertex(vertex: Vertex): Seq[(Vertex, WeightUnit)] = optimizedEdges(vertex.id).map((id, weight) => (lookup(id), weight))
+
+
+case class NewPath(distance: Int, currentVertex: Vertex, vertices: BitSet, path: String = "")(using graph: Graph):
+  lazy val connectedToTarget: Int = if graph.isConnectedToTarget(currentVertex) then 1 else 0
+  private lazy val distanceToTarget = currentVertex.summit.distanceToTarget
+  def next: Seq[NewPath] =
+    graph.connectedVertex(currentVertex).filterNot(nextVertex => vertices.contains(nextVertex._1.id)).map:
+      case (vertex, weight) => NewPath(distance + weight, vertex, vertices + currentVertex.id, path/*s"${currentVertex.summit} - (${distance + weight}), ${path}"*/)
+
+object NewPath:
+  given ordering: Ordering[NewPath] =
+    given Ordering[BitSet] = BitsetOrdering.updateBitSet
+    Ordering.by(p => (-p.distanceToTarget, -p.distance,  p.vertices))
+
+@tailrec
+def solverExp(toExplore: TreeSet[NewPath], toReach: Summit, found: Option[Int] = None)(using graph: Graph): Option[Int] =
+  toExplore match
+    case empty if empty.isEmpty => None
+    case notEmpty =>
+      notEmpty.head match
+        case NewPath(distance, summit, vertices, path) if summit.summit == toReach =>
+          //println(path)
+          Some(distance)
+        case head =>
+          solverExp(toExplore.tail ++ head.next, toReach, found)
 
 
 
