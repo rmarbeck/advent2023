@@ -5,40 +5,41 @@ type Lookup = Map[Position, Id]
 type Graph = Map[Id, Connections]
 type WeightUnit = Int
 type Id = Int
+type Target = Id
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val result1 = solveFor(inputLines)
+    val result1 = searchLongestHikeIn(inputLines)
 
-    val result2 = solveFor(ignoreSlopes(inputLines))
+    val result2 = searchLongestHikeIn(ignoreSlopes(inputLines))
 
     (s"$result1", s"$result2")
 
-def solveFor(input: Seq[String]): String =
-  given maze: Maze = Maze(input)
+def searchLongestHikeIn(input: Seq[String]): String =
+  given trailsMap: TrailsMap = TrailsMap(input)
 
   val crossRoads: Vector[CrossRoad] =
-    (maze.start +: findInnerCrossRoads :+ maze.end).zipWithIndex.map((pos, index) => CrossRoad(index, pos))
+    (trailsMap.start +: findInnerCrossRoads :+ trailsMap.end).zipWithIndex.map((pos, index) => CrossRoad(index, pos))
 
   given lookup: Lookup = crossRoads.map(cr => cr.position -> cr.id).toMap
 
-  given graph: Graph = crossRoads.filterNot(_.position == maze.end).map:
+  given graph: Graph = crossRoads.filterNot(_.position == trailsMap.end).map:
     cr => cr.id -> Connections.from(distanceFrom(cr))
   .toMap
 
-  val start = crossRoads.map(_.id).min
-  val end = crossRoads.map(_.id).max
+  val start = 0
+  given Target = crossRoads.map(_.id).max
 
-  s"${search(start, end)}"
+  s"${longestHike(start)}"
 
-def search(vertex: Id, target: Id, vertices: BitSet = BitSet(), totalDist: Int = 0)(using graph: Graph): Int =
-  if (vertex == target)
+def longestHike(from: Id, alreadySeen: BitSet = BitSet(), totalDist: Int = 0)(using graph: Graph, target: Target): Int =
+  if (from == target)
     totalDist
   else
-    val Connections(possible, values) = graph(vertex)
-    (possible diff vertices).foldLeft(0):
-      case (longest, key) => longest.max(search(key, target, vertices + vertex, totalDist + values(key)))
+    val Connections(connected, distances) = graph(from)
+    (connected diff alreadySeen).fold(0):
+      case (longest, key) => longest.max(longestHike(key, alreadySeen + from, totalDist + distances(key)))
 
 def ignoreSlopes(input: Seq[String]): Seq[String] =
   def slopeAsNormalPath(char: Char): Char =
@@ -48,14 +49,14 @@ def ignoreSlopes(input: Seq[String]): Seq[String] =
 
   input.map(_.map(slopeAsNormalPath))
 
-def findInnerCrossRoads(using maze: Maze): Vector[Position] =
+def findInnerCrossRoads(using maze: TrailsMap): Vector[Position] =
   for
     x <- maze.xIndices; y <- maze.yIndices if maze.isACrossroad(x,y)
   yield
     Position(x, y)
 .toVector
 
-def distanceFrom(crossRoad: CrossRoad)(using maze: Maze, lookup: Lookup): List[(Position, Int)] =
+def distanceFrom(crossRoad: CrossRoad)(using maze: TrailsMap, lookup: Lookup): List[(Position, Int)] =
   @tailrec
   def walk(beforeAndCurrent: (Position, Position), distance: Int = 1): (Position, Int) =
     val (before, current) = beforeAndCurrent
@@ -76,8 +77,8 @@ object Connections:
     .toMap
     Connections(BitSet.fromSpecific(weights.keySet), weights)
 
-case class Maze(input: Seq[String]):
-  import Maze.{moves, dirs}
+case class TrailsMap(input: Seq[String]):
+  import TrailsMap.{moves, dirs}
   private val data: Array[Array[Char]] = input.map(_.toCharArray).toArray.transpose
   lazy val xIndices: Range = data.indices
   lazy val yIndices: Range = data(0).indices
@@ -100,11 +101,11 @@ case class Maze(input: Seq[String]):
       case '#' => false
       case _ => moves.map((dx, dy) => (x + dx, y + dy)).count((nx, ny) => isDefined(nx, ny) && data(nx)(ny) != '#') >= 3
 
-object Maze:
+object TrailsMap:
   private val moves = List((0, 1), (1, 0), (0, -1), (-1, 0))
   private val dirs = List('v', '>', '^', '<')
 
 case class Position(x: Int, y: Int)
 
 case class CrossRoad(id: Id, position: Position):
-  def next(using maze: Maze): Seq[(Position, Position)] = maze.next(position).map(nextPos => (position, nextPos))
+  def next(using maze: TrailsMap): Seq[(Position, Position)] = maze.next(position).map(nextPos => (position, nextPos))
