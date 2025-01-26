@@ -9,29 +9,39 @@ type Target = Id
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
+    given trailsMap: TrailsMap = TrailsMap(inputLines)
 
-    val result1 = searchLongestHikeIn(inputLines)
+    val crossRoads: Vector[CrossRoad] =
+      (trailsMap.start +: findInnerCrossRoads :+ trailsMap.end).zipWithIndex.map((pos, index) => CrossRoad(index, pos))
 
-    val result2 = searchLongestHikeIn(ignoreSlopes(inputLines))
+    given lookup: Lookup = crossRoads.map(cr => cr.position -> cr.id).toMap
+
+    val graph: Graph = crossRoads.filterNot(_.position == trailsMap.end).map:
+      cr => cr.id -> Connections.from(distanceFrom(cr))
+    .toMap
+
+    val start = 0
+    given Target = crossRoads.map(_.id).max
+
+    val result1 =
+      given Graph = graph
+      s"${longestHike(start)}"
+
+    val result2 =
+      given Graph = transformReflexive(graph)
+      s"${longestHike(start)}"
 
     (s"$result1", s"$result2")
 
-def searchLongestHikeIn(input: Seq[String]): String =
-  given trailsMap: TrailsMap = TrailsMap(input)
 
-  val crossRoads: Vector[CrossRoad] =
-    (trailsMap.start +: findInnerCrossRoads :+ trailsMap.end).zipWithIndex.map((pos, index) => CrossRoad(index, pos))
-
-  given lookup: Lookup = crossRoads.map(cr => cr.position -> cr.id).toMap
-
-  given graph: Graph = crossRoads.filterNot(_.position == trailsMap.end).map:
-    cr => cr.id -> Connections.from(distanceFrom(cr))
-  .toMap
-
-  val start = 0
-  given Target = crossRoads.map(_.id).max
-
-  s"${longestHike(start)}"
+def transformReflexive(graph: Graph): Graph =
+  graph.map:
+    case (id, connections) =>
+      val others = graph.filterNot(_._1 == id)
+      val updatedConnections = others.foldLeft(connections):
+        case (acc, target -> targetConnections) if targetConnections.destinations.contains(id) => acc + (target, targetConnections.weights(id))
+        case (acc, _)  => acc
+      id -> updatedConnections
 
 def longestHike(from: Id, alreadySeen: BitSet = BitSet(), totalDist: Int = 0)(using graph: Graph, target: Target): Int =
   if (from == target)
@@ -68,7 +78,8 @@ def distanceFrom(crossRoad: CrossRoad)(using maze: TrailsMap, lookup: Lookup): L
 
   crossRoad.next.map(walk(_)).toList
 
-case class Connections(destinations: BitSet, weights: Map[Id, WeightUnit])
+case class Connections(destinations: BitSet, weights: Map[Id, WeightUnit]):
+  def +(id: Id, weightUnit: WeightUnit): Connections = Connections(destinations + id, weights + (id -> weightUnit))
 
 object Connections:
   def from(connectedCrossRoads: List[(Position, Int)])(using lookup: Lookup): Connections =
