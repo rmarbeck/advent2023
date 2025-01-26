@@ -1,213 +1,110 @@
 import scala.annotation.tailrec
+import scala.collection.immutable.{BitSet, Map}
+
+type Lookup = Map[Position, Id]
+type Graph = Map[Id, Connections]
+type WeightUnit = Int
+type Id = Int
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    given forest: Forest = Forest.from(inputLines)
-    val resultPart1 = {
-      val summits = findSummits(part2 = false)
-      given summitsHolder: SummitsHolder = SummitsHolder(summits)
+    val result1 = solveFor(inputLines)
 
-      val start = summitsHolder.byPosition(forest.startPosition)
-      val sortedGraph = topologicalSort(start)
+    val result2 = solveFor(ignoreSlopes(inputLines))
 
-      countTopologicallySorted(sortedGraph)
-    }
+    (s"$result1", s"$result2")
 
-    val resultPart2 = {
-      val summits = findSummits(part2 = true)
+def solveFor(input: Seq[String]): String =
+  given maze: Maze = Maze(input)
 
-      given summitsHolder2: SummitsHolder = SummitsHolder(summits).makeFullDuplexConnexions
-      val start = summitsHolder2.byPosition(forest.startPosition)
-      val end = summitsHolder2.byPosition(forest.endPosition)
-      countDFS(start, end).get
-    }
+  val crossRoads: Vector[CrossRoad] =
+    (maze.start +: findInnerCrossRoads :+ maze.end).zipWithIndex.map((pos, index) => CrossRoad(index, pos))
 
-    val result1 = s"${resultPart1}"
-    val result2 = s"${resultPart2}"
+  given lookup: Lookup = crossRoads.map(cr => cr.position -> cr.id).toMap
 
-    (s"${result1}", s"${result2}")
+  given graph: Graph = crossRoads.filterNot(_.position == maze.end).map:
+    cr => cr.id -> Connections.from(distanceFrom(cr))
+  .toMap
 
-end Solution
+  val start = crossRoads.map(_.id).min
+  val end = crossRoads.map(_.id).max
 
-case class Position(row: Int, col: Int):
-  lazy val north = this.copy(row = row - 1)
-  lazy val south = this.copy(row = row + 1)
-  lazy val west = this.copy(col = col - 1)
-  lazy val east = this.copy(col = col + 1)
+  s"${search(start, end)}"
 
-  lazy val around = List(north, south, west, east)
+def search(vertex: Id, target: Id, vertices: BitSet = BitSet(), totalDist: Int = 0)(using graph: Graph): Int =
+  if (vertex == target)
+    totalDist
+  else
+    val Connections(possible, values) = graph(vertex)
+    (possible diff vertices).foldLeft(0):
+      case (longest, key) => longest.max(search(key, target, vertices + vertex, totalDist + values(key)))
 
-enum TypeOfLocation:
-  case Path, Tree, SlopeUp, SlopeDown, SlopeLeft, SlopeRight
+def ignoreSlopes(input: Seq[String]): Seq[String] =
+  def slopeAsNormalPath(char: Char): Char =
+    char match
+      case '#' => '#'
+      case _ => '.'
 
-export TypeOfLocation.*
+  input.map(_.map(slopeAsNormalPath))
 
-type SummitName = String
+def findInnerCrossRoads(using maze: Maze): Vector[Position] =
+  for
+    x <- maze.xIndices; y <- maze.yIndices if maze.isACrossroad(x,y)
+  yield
+    Position(x, y)
+.toVector
 
-type DistanceToSummit = (SummitName, Int)
+def distanceFrom(crossRoad: CrossRoad)(using maze: Maze, lookup: Lookup): List[(Position, Int)] =
+  @tailrec
+  def walk(beforeAndCurrent: (Position, Position), distance: Int = 1): (Position, Int) =
+    val (before, current) = beforeAndCurrent
+    if lookup.contains(current) then
+      (current, distance)
+    else
+      val next = maze.next(current).filterNot(_ == before).head
+      walk((current, next), distance + 1)
 
-case class Summit(name: SummitName, nexts: List[DistanceToSummit]):
-  lazy val position: Position = Summit.fromName(name)
-  override def toString: String = s"[$name]"
+  crossRoad.next.map(walk(_)).toList
 
-object Summit:
-  def toName(position: Position): SummitName = s"${position.row}-${position.col}"
-  private def fromName(name: SummitName): Position =
-    name match
-      case s"${row}-${col}" => Position(row.toInt, col.toInt)
+case class Connections(destinations: BitSet, weights: Map[Id, WeightUnit])
 
-case class SummitsHolder(allSummits: Seq[Summit]):
-  def makeFullDuplexConnexions: SummitsHolder =
-    val summitsWithDualConnexions =
-      for
-        toAddTo <- allSummits
-        nameOfSummitWeAddBacklinksTo = toAddTo.name
-        backlinks =
-          for
-            toLookIn <- allSummits; if toLookIn != toAddTo
-            found <- toLookIn.nexts; if found._1 == nameOfSummitWeAddBacklinksTo
-          yield
-            (toLookIn.name, found._2)
-      yield
-        Summit(nameOfSummitWeAddBacklinksTo, (toAddTo.nexts ++ backlinks).distinct)
+object Connections:
+  def from(connectedCrossRoads: List[(Position, Int)])(using lookup: Lookup): Connections =
+    val weights = connectedCrossRoads.map:
+      case (position, weight) => (lookup(position), weight)
+    .toMap
+    Connections(BitSet.fromSpecific(weights.keySet), weights)
 
-    SummitsHolder(summitsWithDualConnexions)
+case class Maze(input: Seq[String]):
+  import Maze.{moves, dirs}
+  private val data: Array[Array[Char]] = input.map(_.toCharArray).toArray.transpose
+  lazy val xIndices: Range = data.indices
+  lazy val yIndices: Range = data(0).indices
+  private lazy val (width, height) = (xIndices.end, yIndices.end)
 
-  private val byName: Map[String, Summit] = allSummits.map(current => current.name -> current).toMap
-  private lazy val nextOfArray: Array[List[Int]] =
-    for
-      summitToFindNext <- allSummits.toArray
-      nexts = summitToFindNext.nexts.map(_._1)
-    yield
-      nexts.map(name => getIndex(byName(name)))
+  val start: Position = Position(1, 0)
+  val end: Position = Position(width - 2, height - 1)
 
-  private lazy val distanceBetweenArray: Array[Array[Int]] =
-    for
-      summitOne <- allSummits.toArray
-      distancesToSummitOne =
-        for
-          summitTwo <- allSummits.toArray
-        yield
-          summitOne.nexts.find(_._1 == summitTwo.name).fold(Int.MaxValue)(_._2)
-    yield
-      distancesToSummitOne
+  private def isDefined(x: Int, y: Int): Boolean = data.isDefinedAt(x) && data(x).isDefinedAt(y)
 
-  private def getIndex(summit: Summit): Int = allSummits.indexOf(summit)
-  private def fromIndex(index: Int): Summit = allSummits(index)
+  def next(position: Position): List[Position] =
+    val Position(x, y) = position
+    moves.zip(dirs).map:
+      case ((dx, dy), authorized) => (x + dx, y + dy, authorized)
+    .withFilter((nx, ny, authorized) => isDefined(nx, ny) && List('.', authorized).contains(data(nx)(ny)))
+    .map((nx, ny, _) => Position(nx, ny))
 
-  def byPosition(position: Position): Int = getIndex(byName(Summit.toName(position)))
-  def nextOf(index: Int): List[Int] = nextOfArray(index)
-  def distanceBetween(first: Int, second: Int): Int = distanceBetweenArray(first)(second)
+  def isACrossroad(x: Int, y: Int): Boolean =
+    data(x)(y) match
+      case '#' => false
+      case _ => moves.map((dx, dy) => (x + dx, y + dy)).count((nx, ny) => isDefined(nx, ny) && data(nx)(ny) != '#') >= 3
 
+object Maze:
+  private val moves = List((0, 1), (1, 0), (0, -1), (-1, 0))
+  private val dirs = List('v', '>', '^', '<')
 
+case class Position(x: Int, y: Int)
 
-case class WalkingStatus(summitsToExplore: List[Summit], nextPosition: Option[Position], currentSteps: Int, alreadyExploredPositions: List[Position], alreadyExploredSummits: List[Summit], part2: Boolean = false)(using forest: Forest):
-  def goNext = part2 match
-      case true => forest.nextPart2
-      case false => forest.nextPart1
-  def nextPositionsAuthorized(from: Position) = goNext(from).filterNot(alreadyExploredPositions.contains).filterNot(_ == summitsToExplore.head.position)
-
-  def nextPositionIsNotDefined: Boolean = nextPosition.isEmpty
-  def nextPositionIsACrossRoad: Boolean = nextPosition.fold(false)(forest.isACrossRoad)
-
-  def nextPositionFromHead: List[Position] = nextPositionsAuthorized(summitsToExplore.head.position)
-
-  def summitFoundIsAKnownOne: Option[Summit] = (summitsToExplore ::: alreadyExploredSummits).find(_.position == nextPosition.get)
-
-  def popHeadAndContinue: WalkingStatus =
-    val head :: tail = summitsToExplore : @unchecked
-    this.copy(summitsToExplore = tail, nextPosition = None, currentSteps = 0, alreadyExploredSummits = head +: alreadyExploredSummits)
-
-  def continueViaHead(nextPosition: Position): WalkingStatus =
-    this.copy(nextPosition = Some(nextPosition), currentSteps = 1)
-
-  def walk: WalkingStatus =
-    val goingTo = nextPositionsAuthorized(nextPosition.get).head
-    this.copy(nextPosition = Some(goingTo), currentSteps = currentSteps + 1, alreadyExploredPositions = nextPosition.get +: alreadyExploredPositions)
-
-  def passingThroughKnownSummit(knownSummit: Summit): WalkingStatus =
-    val head :: tail = summitsToExplore : @unchecked
-    val updatedHead = head.copy(nexts = (knownSummit.name, currentSteps) +: head.nexts)
-    this.copy(summitsToExplore = updatedHead :: tail, nextPosition = None, currentSteps = 0)
-
-  def passingThroughNewSummit: WalkingStatus =
-    val head :: tail = summitsToExplore : @unchecked
-    val newSummit = Summit(Summit.toName(nextPosition.get), Nil)
-    val updatedCurrentHead = head.copy(nexts = (newSummit.name, currentSteps) +: head.nexts)
-    this.copy(summitsToExplore = updatedCurrentHead :: (tail :+ newSummit), nextPosition = None, currentSteps = 0)
-
-  lazy val situation: WalkingStatus.MainSituations =
-    summitsToExplore match
-      case Nil => NoMoreSummitToExplore
-      case head :: tail =>
-        nextPosition match
-          case None => NextPositionIsNotDefinedYet
-          case Some(nexPos) if nextPositionIsACrossRoad => NextPositionIsACrossRoad
-          case _ => NextPositionIsAPath
-
-object WalkingStatus:
-  enum MainSituations:
-    case NoMoreSummitToExplore, NextPositionIsNotDefinedYet, NextPositionIsACrossRoad, NextPositionIsAPath
-
-export WalkingStatus.MainSituations.*
-
-@tailrec
-def findNextSummit(walkingStatus: WalkingStatus)(using forest: Forest): List[Summit] =
-  walkingStatus.situation match
-    case NoMoreSummitToExplore => walkingStatus.alreadyExploredSummits
-    case NextPositionIsAPath => findNextSummit(walkingStatus.walk)
-    case NextPositionIsNotDefinedYet =>
-      val nextStatus = walkingStatus.nextPositionFromHead match
-        case Nil => walkingStatus.popHeadAndContinue
-        case newNextPosition :: _ => walkingStatus.continueViaHead(newNextPosition)
-      findNextSummit(nextStatus)
-    case NextPositionIsACrossRoad =>
-      val nexStatus = walkingStatus.summitFoundIsAKnownOne match
-        case None => walkingStatus.passingThroughNewSummit
-        case Some(previouslyFound) => walkingStatus.passingThroughKnownSummit(previouslyFound)
-      findNextSummit(nexStatus)
-
-def findSummits(part2: Boolean)(using forest: Forest): List[Summit] =
-  val start = Position(0,1)
-  val initialSummit = Summit(Summit.toName(start), Nil)
-  findNextSummit(WalkingStatus(List(initialSummit), Some(start), 0, Nil, Nil, part2))
-
-case class Forest(places: Array[Array[TypeOfLocation]]):
-  private lazy val height = places.length
-  private lazy val width = places(0).length
-  lazy val startPosition = Position(0, 1)
-  lazy val endPosition = Position(height-1, width-2)
-
-  private def isReachable(position: Position): Boolean =
-    val Position(row, col) = position
-    places.isDefinedAt(row) && places(row).isDefinedAt(col) && places(row)(col) != Tree
-
-  private def isReachableFrom(position: Position, from: Position): Boolean =
-    isReachable(position) && {
-      val Position(row, col) = position
-      (places(row)(col), row - from.row, col - from.col) match
-        case (Path, _, _) => true
-        case (SlopeUp, rowChange, _) if rowChange < 0 => true
-        case (SlopeDown, rowChange, _) if rowChange > 0 => true
-        case (SlopeLeft, _, colChange) if colChange < 0 => true
-        case (SlopeRight, _, colChange) if colChange > 0 => true
-        case _ => false
-    }
-
-  def nextPart1(position: Position): List[Position] = position.around.filter(isReachableFrom(_, position))
-  def nextPart2(position: Position): List[Position] = position.around.filter(isReachable)
-
-  def isACrossRoad(position: Position): Boolean = position.around.count(isReachable) > 2 || position == endPosition
-
-object Forest:
-  def from(inputLines: Seq[String]): Forest =
-    val places = inputLines.toArray.map:
-      line => line.toCharArray.map:
-        case '.' => Path
-        case '#' => Tree
-        case '^' => SlopeUp
-        case 'v' => SlopeDown
-        case '<' => SlopeLeft
-        case '>' => SlopeRight
-    Forest(places)
+case class CrossRoad(id: Id, position: Position):
+  def next(using maze: Maze): Seq[(Position, Position)] = maze.next(position).map(nextPos => (position, nextPos))
