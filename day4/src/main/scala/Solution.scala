@@ -1,32 +1,25 @@
+type CardNumbers = Map[Int, Int]
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
     val cards = inputLines.collect:
       case CardExt(card) => card
 
-    val resultPart1 = cards.map(_.score).sum
+    val result1 = cards.map(_.score).sum
 
-    val totalCards = Array.fill(cards.size)(1)
-    for
-      (currentCard, index) <- cards.zipWithIndex
-      winnings = currentCard.winnings
-      if winnings != 0
-    do
-      val numberOfCurrentCard = totalCards(index)
-      (index + 1 to index + winnings).foreach:
-        innerIndex =>
-          totalCards.isDefinedAt(innerIndex) match
-            case true => totalCards(innerIndex) += numberOfCurrentCard
-            case false => ()
+    val cardsNumber = cards.size
 
-    val resultPart2 = totalCards.sum
+    val nbOfEachCards: CardNumbers = cards.map(_.winnings).zipWithIndex.foldLeft(Map.empty.withDefault(key => if key < cardsNumber then 1 else 0): CardNumbers):
+      case (acc, (0, index)) => acc
+      case (acc, (winnings, index)) =>
+        acc ++
+          (index + 1 to index + winnings).collect:
+            case idx if acc(idx) != 0 => idx -> (acc(idx) + acc(index))
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
+    val result2 = cards.indices.map(nbOfEachCards).sum
 
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 case class Card(winning: List[Int], draw: List[Int]):
   lazy val winnings: Int = (draw intersect winning).size
