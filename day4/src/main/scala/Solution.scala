@@ -1,30 +1,34 @@
+import scala.collection.immutable.BitSet
+
 type CardNumbers = Map[Int, Int]
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
-    val cards = inputLines.collect:
+    val cards = inputLines.view.collect:
       case CardExt(card) => card
-
-    val result1 = cards.map(_.score).sum
 
     val cardsNumber = cards.size
 
-    val nbOfEachCards: CardNumbers = cards.map(_.winnings).zipWithIndex.foldLeft(Map.empty.withDefault(key => if key < cardsNumber then 1 else 0): CardNumbers):
-      case (acc, (0, index)) => acc
-      case (acc, (winnings, index)) =>
-        acc ++
-          (index + 1 to index + winnings).collect:
-            case idx if acc(idx) != 0 => idx -> (acc(idx) + acc(index))
-
-    val result2 = cards.indices.map(nbOfEachCards).sum
+    val (result1: Int, result2: Int, _) = cards.map(_.winnings).zipWithIndex.foldLeft((0, 0, Map.empty.withDefault(key => if key < cardsNumber then 1 else 0): CardNumbers)):
+      case ((sumPart1, sumPart2, remainingCardNumbers), (winnings, index)) =>
+        val current = remainingCardNumbers(index)
+        (sumPart1 + winnings.toScore,
+          sumPart2 + current,
+          remainingCardNumbers - index ++
+            (index + 1 to index + winnings).collect:
+              case idx if remainingCardNumbers(idx) != 0 => idx -> (remainingCardNumbers(idx) + current)
+          )
 
     (s"$result1", s"$result2")
 
-case class Card(winning: List[Int], draw: List[Int]):
+case class Card(winning: BitSet, draw: BitSet):
   lazy val winnings: Int = (draw intersect winning).size
-  lazy val score: Int =
-    winnings match
+  lazy val score: Int = winnings.toScore
+
+extension (self: Int)
+  def toScore: Int =
+    self match
       case 0 => 0
       case value => math.pow(2, value - 1).toInt
 
@@ -36,7 +40,7 @@ object CardExt:
       case _ => None
 
   private object NumbersExt:
-    def unapply(str: String): Option[List[Int]] =
+    def unapply(str: String): Option[BitSet] =
       """(\d+)""".r.unanchored.findAllIn(str).toList match
         case Nil => None
-        case values => Some(values.map(_.toInt))
+        case values => Some(values.map(_.toInt).to(BitSet))
