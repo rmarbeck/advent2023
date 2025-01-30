@@ -1,6 +1,7 @@
 import scala.collection.immutable.BitSet
 
-type CardNumbers = Map[Int, Int]
+type CardsOccurrences = Map[Int, Int]
+type Accumulator = (Int, Int, CardsOccurrences)
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -8,17 +9,19 @@ object Solution:
     val cards = inputLines.view.collect:
       case CardExt(card) => card
 
-    val cardsNumber = cards.size
+    val numberOfCards = cards.size
+    val start: Accumulator = (0, 0, Map.empty.withDefault(key => if key < numberOfCards then 1 else 0))
 
-    val (result1: Int, result2: Int, _) = cards.map(_.winnings).zipWithIndex.foldLeft((0, 0, Map.empty.withDefault(key => if key < cardsNumber then 1 else 0): CardNumbers)):
+    val (result1, result2, _) = cards.map(_.winnings).zipWithIndex.foldLeft(start):
       case ((sumPart1, sumPart2, remainingCardNumbers), (winnings, index)) =>
-        val current = remainingCardNumbers(index)
-        (sumPart1 + winnings.toScore,
-          sumPart2 + current,
+        val nbOccurrences = remainingCardNumbers(index)
+        (
+          sumPart1 + winnings.toScore,
+          sumPart2 + nbOccurrences,
           remainingCardNumbers - index ++
             (index + 1 to index + winnings).collect:
-              case idx if remainingCardNumbers(idx) != 0 => idx -> (remainingCardNumbers(idx) + current)
-          )
+              case idx if remainingCardNumbers(idx) != 0 => idx -> (remainingCardNumbers(idx) + nbOccurrences)
+        )
 
     (s"$result1", s"$result2")
 
@@ -30,7 +33,7 @@ extension (self: Int)
   def toScore: Int =
     self match
       case 0 => 0
-      case value => math.pow(2, value - 1).toInt
+      case value => 1 << (value - 1)
 
 object CardExt:
   private val CardMatcher = """(\d+): (.+) \| (.+)""".r.unanchored
@@ -43,4 +46,4 @@ object CardExt:
     def unapply(str: String): Option[BitSet] =
       """(\d+)""".r.unanchored.findAllIn(str).toList match
         case Nil => None
-        case values => Some(values.map(_.toInt).to(BitSet))
+        case values => Some(values.foldLeft(BitSet.empty)(_ + _.toInt))
