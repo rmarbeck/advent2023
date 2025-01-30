@@ -9,7 +9,9 @@ type Id = Int
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
+    val before = System.currentTimeMillis()
     val result1 = solveFor(inputLines)
+    println(s"Time is ${System.currentTimeMillis() - before}ms")
 
     val result2 = solveFor(ignoreSlopes(inputLines))
 
@@ -31,6 +33,7 @@ def solveFor(input: Seq[String]): String =
   val end = crossRoads.map(_.id).max
 
   s"${search(start, end)}"
+
 
 def search(vertex: Id, target: Id, vertices: BitSet = BitSet(), totalDist: Int = 0)(using graph: Graph): Int =
   if (vertex == target)
@@ -67,7 +70,8 @@ def distanceFrom(crossRoad: CrossRoad)(using maze: Maze, lookup: Lookup): List[(
 
   crossRoad.next.map(walk(_)).toList
 
-case class Connections(destinations: BitSet, weights: Map[Id, WeightUnit])
+case class Connections(destinations: BitSet, weights: Map[Id, WeightUnit]):
+  def +(id: Id, weightUnit: WeightUnit): Connections = Connections(destinations + id, weights + (id -> weightUnit))
 
 object Connections:
   def from(connectedCrossRoads: List[(Position, Int)])(using lookup: Lookup): Connections =
