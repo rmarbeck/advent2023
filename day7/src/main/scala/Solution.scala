@@ -6,29 +6,26 @@ object Solution:
     val handsWithBids = inputLines.map:
       case s"$hand $bid" => HandWithBid(Hand(hand), bid.toLong)
 
-    val orderingOfHandsPart1 =
+    val handsOrderedForPart1 =
       import Card.part1Ordering
       import Hand.part1Ordering
       handsWithBids.sortBy(_.hand)
 
-    val orderingOfHandsPart2 =
+    val handsOrderedForPart2 =
       import Card.part2Ordering
       import Hand.part2Ordering
       handsWithBids.sortBy(_.hand)
 
-    val List(resultPart1, resultPart2) = List(orderingOfHandsPart1, orderingOfHandsPart2).map:
-      case sortedHands => sortedHands.zipWithIndex.map((handWithBid, index) => handWithBid.bid * (index + 1)).sum
+    val List(result1, result2) = List(handsOrderedForPart1, handsOrderedForPart2).map:
+      _.zipWithIndex.map:
+        (handWithBid, index) => handWithBid.bid * (index + 1)
+      .sum
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 case class Card(char: Char):
-  val List(ordinalPart1, ordinalPart2) = List(Card.ordinalsPart1, Card.ordinalsPart2).map:
-    case ordinals => ordinals.get(char) match
+  private val List(ordinalPart1, ordinalPart2) = List(Card.ordinalsPart1, Card.ordinalsPart2).map:
+    ordinals => ordinals.get(char) match
       case Some(value) => value
       case None => throw Exception(s"Not valid card : $char")
 
@@ -38,24 +35,25 @@ object Card:
       case (char, index) => char -> index
     : _*)
   private val letters: List[Char] = List('A', 'K', 'Q', 'J', 'T')
-  private val ordinalsPart1: Map[Char, Int] = asHashMap(letters ::: (9 to 2 by -1).map(_.toString.head).toList)
-  private val ordinalsPart2: Map[Char, Int] = asHashMap(letters.filterNot(_ == 'J') ::: (9 to 2 by -1).map(_.toString.head).toList ::: List('J'))
+  private val figures: List[Char] = (9 to 2 by -1).map(_.toString.head).toList
+  private val ordinalsPart1: Map[Char, Int] = asHashMap(letters ::: figures)
+  private val ordinalsPart2: Map[Char, Int] = asHashMap(letters.filterNot(_ == 'J') ::: figures ::: 'J' :: Nil)
 
-  given part1Ordering: Ordering[Card] with
-    def compare(first: Card, second: Card): Int =
-      first.ordinalPart1.compare(second.ordinalPart1)
+  given part1Ordering: Ordering[Card] = Ordering.by(_.ordinalPart1)
 
-  given part2Ordering: Ordering[Card] with
-    def compare(first: Card, second: Card): Int =
-      first.ordinalPart2.compare(second.ordinalPart2)
+  given part2Ordering: Ordering[Card] = Ordering.by(_.ordinalPart2)
+
+  given listOfCardOrdering(using Ordering[Card]): Ordering[List[Card]] with
+    def compare(first: List[Card], second: List[Card]): Int =
+      second.zip(first).map((cardOfThis, cardOfThat) => summon[Ordering[Card]].compare(cardOfThis, cardOfThat)).find(_ != 0).getOrElse(0)
 
 enum TypeOfHand:
   case FiveOfAKind, FourOfAKind, FullHouse, ThreeOfAKind, TwoPair, OnePair, HighCard
 
-export TypeOfHand.*
+import TypeOfHand.*
 
 case class Hand(raw: String):
-  lazy val cards: List[Card] = raw.map(Card(_)).toList
+  private lazy val cards: List[Card] = raw.map(Card(_)).toList
   val typeOfHandPart1: TypeOfHand =
     val grouped = raw.groupMapReduce(identity)(_ => 1)(_ + _)
     (grouped.values.max, grouped.values.product) match
@@ -91,17 +89,9 @@ case class Hand(raw: String):
       case (1, _, 0) => HighCard
 
 object Hand:
-  private def compare(first: Hand, second: Hand, extractor: Hand => Int)(using Ordering[Card]): Int =
-    extractor.apply(first).compare(extractor.apply(second)) match
-      case 0 => first.cards.zip(second.cards).map((cardOfThis, cardOfThat) => summon[Ordering[Card]].compare(cardOfThis, cardOfThat)).find(_ != 0).getOrElse(0)
-      case value => value
-  given part1Ordering(using Ordering[Card]): Ordering[Hand] with
-    def compare(first: Hand, second: Hand): Int =
-      -Hand.compare(first, second, _.typeOfHandPart1.ordinal)
+  given part1Ordering(using Ordering[Card]): Ordering[Hand] = Ordering.by(hand => (-hand.typeOfHandPart1.ordinal, hand.cards))
 
-  given part2Ordering(using Ordering[Card]): Ordering[Hand] with
-    def compare(first: Hand, second: Hand): Int =
-      -Hand.compare(first, second, _.typeOfHandPart2.ordinal)
+  given part2Ordering(using Ordering[Card]): Ordering[Hand] = Ordering.by(hand => (-hand.typeOfHandPart2.ordinal, hand.cards))
 
 case class HandWithBid(hand: Hand, bid: Long):
   override def toString: String = s"${hand.raw} ($bid) - ${hand.typeOfHandPart1} - ${hand.typeOfHandPart2}"
