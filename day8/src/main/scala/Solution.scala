@@ -1,77 +1,69 @@
 import scala.annotation.tailrec
 import scala.collection.immutable.HashMap
 
+type Moves = Vector[LorR]
+type Key = String
+type Network = Map[Key, Alternatives]
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
-    val moves = inputLines.head
-    val network = HashMap[String, LeftOrRight](inputLines.tail.filterNot(_.isEmpty).map:
-      case s"$key = ($left, $right)" => key -> LeftOrRight(left, right)
-    : _*)
+    given Moves = inputLines.head.map(LorR.from).toVector
+    given network: Network = HashMap.fromSpecific:
+      inputLines.tail.collect:
+        case s"$key = ($left, $right)" => key -> Alternatives(left, right)
 
-    val resultPart1 = search(network, "AAA", moves)
+    val result1 = search("AAA")
 
-    val part2Start = network.keys.filter(_.last == 'A').toList
-    val resultPart2 = lowestProduct {
-      part2Start.map(search(network, _, moves))
-    }
+    val part2Start = network.keys.withFilter(_.last == 'A')
+    val result2 = lowestProduct:
+      part2Start.map(search(_)).toList
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 @tailrec
-def search(in: Map[String, LeftOrRight], from: String, via: String, inter: Long = 0) : Long =
-  from.last == 'Z' match
-    case true => inter
-    case false =>
-      val currentMove = via.charAt((inter%via.size).toInt)
-      val nextFrom = in.get(from) match
-          case Some(value: LeftOrRight) => value.extract(currentMove)
-          case None => throw Exception(s"Key not found $from")
+def search(from: Key, steps: Long = 0)(using network: Network, moves: Moves) : Long =
+  if from.last == 'Z' then
+    steps
+  else
+    val currentMove: LorR = moves((steps % moves.size).toInt)
+    val nextFrom: Key = network(from).extract(currentMove)
 
-      search(in, nextFrom, via, inter + 1)
+    search(nextFrom, steps + 1)
 
 enum LorR:
   case Left, Right
 
 object LorR:
-  def from(char: Char) =
+  def from(char: Char): LorR =
     char match
       case 'L' => Left
       case 'R' => Right
       case _ => throw Exception("Unsupported move")
 
-export LorR.*
+import LorR.*
 
-case class LeftOrRight(left: String, right: String):
-  private def extract(move: LorR): String =
+case class Alternatives(left: String, right: String):
+  def extract(move: LorR): Key =
     move match
       case Left => left
       case Right => right
-  def extract(move: Char): String = extract(LorR.from(move))
 
-
+@tailrec
 def gcd(first: Long, second: Long): Long =
   (first, second) match
-    case (0, value) => value
+    case (0, value) => value.abs
     case (xValue, yValue) if xValue < 0 => gcd(-xValue, yValue)
-    case (xValue, yValue) if yValue < 0 => -gcd(xValue, -yValue)
     case (xValue, yValue) => gcd(yValue % xValue, xValue)
 
 def lowestProduct(values: List[Long]): Long =
   values match
     case head :: Nil => head
     case head :: tail =>
-      val gcds =
-        tail.map:
-          case currentFromTail => gcd(head, currentFromTail)
+      val gcds = tail.toSet.map(gcd(head, _))
 
-      val commonGcd = gcds.distinct.length match
-        case 1 => gcds(0)
+      val commonGcd = gcds.size match
+        case 1 => gcds.head
         case _ => throw Exception(s"No common GCD found")
 
       values.map(_ / commonGcd).product * commonGcd
-    case _ => throw Exception(s"Not managed")
+    case _ => throw Exception(s"Not supposed to happen")
