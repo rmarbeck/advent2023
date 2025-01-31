@@ -2,28 +2,24 @@ import scala.annotation.tailrec
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
+    val NumbersExt = """(-?\d+)""".r
     val listsOfValues = inputLines.map:
-      case values => values.split(" ").map(_.toLong).toList
+      NumbersExt.findAllIn(_).toVector.map(_.toLong)
 
-    val List(resultPart1, resultPart2) =
+    val List(result1, result2) =
       List(listsOfValues, listsOfValues.map(_.reverse)).map:
-        case currentList => currentList.map(solve(_)).sum
+        currentList => currentList.map(solve(_)).sum
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 @tailrec
-def solve(values: List[Long], previousSum: Long = 0l) : Long =
-  values.forall(_ == 0l) match
-    case true => previousSum
-    case false =>
-      val differences =
-        values.sliding(2, 1).map:
-          case List(first, second) => second - first
-          case value => throw Exception(s"Not managed : $value")
+def solve(values: Vector[Long], previousSum: Long = 0L) : Long =
+  if values.forall(_ == 0L) then
+    previousSum
+  else
+    val differences =
+      values.sliding(2, 1).collect:
+        case Vector(first, second) => second - first
+      .toVector
 
-      solve(differences.toList, values.last + previousSum)
+    solve(differences, values.last + previousSum)
