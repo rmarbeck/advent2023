@@ -1,4 +1,7 @@
 import scala.annotation.tailrec
+import scala.collection.immutable.TreeSet
+
+val expansionPart2 = 1_000_000
 
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
@@ -6,37 +9,34 @@ object Solution:
     val universe = Universe:
       inputLines.zipWithIndex.flatMap:
         case (line, row) =>
-          line.zipWithIndex.flatMap:
-            case ('#', col) => Some(Galaxy(row, col))
-            case _ => None
+          line.zipWithIndex.collect:
+            case ('#', col) => Galaxy(row, col)
 
     val result1 = s"${universe.minimalDistances()}"
-    val result2 = s"${universe.minimalDistances(1000000)}"
+    val result2 = s"${universe.minimalDistances(expansionPart2)}"
 
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 case class Galaxy(row: Int, col: Int):
   def taxiDistanceWith(other: Galaxy): Long = math.abs(row - other.row) + math.abs(col - other.col)
 
 case class Universe(galaxies: Seq[Galaxy]):
-  private lazy val rows = galaxies.map(_.row)
-  private lazy val cols = galaxies.map(_.col)
+  private lazy val (rows, cols) = galaxies.map(gal => (gal.row, gal.col)).unzip
   private lazy val height = rows.max + 1
   private lazy val width = cols.max + 1
 
-  private lazy val emptyRows = scala.collection.immutable.TreeSet((0 until height) diff rows:_*)
-  private lazy val emptyCols = scala.collection.immutable.TreeSet((0 until width) diff cols:_*)
+  private lazy val emptyRows = ((0 until height) diff rows).toSet
+  private lazy val emptyCols = ((0 until width) diff cols).toSet
 
   private def emptySpaceBetween(firstGalaxy: Galaxy, secondGalaxy: Galaxy): Long =
+    @tailrec
     def nbMatching(rawSet: Set[Int], limit1: Int, limit2: Int): Int =
-      limit1 <= limit2 match
-        case true =>
-          rawSet.count:
-            case value if value > limit1 && value < limit2 => true
-            case _ => false
-        case false => nbMatching(rawSet, limit2, limit1)
+      if limit1 <= limit2 then
+        rawSet.count:
+          case value if value > limit1 && value < limit2 => true
+          case _ => false
+      else
+        nbMatching(rawSet, limit2, limit1)
 
     val nbOfEmptyRowsIncluded = nbMatching(emptyRows, firstGalaxy.row, secondGalaxy.row)
     val nbOfEmptyColsIncluded = nbMatching(emptyCols, firstGalaxy.col, secondGalaxy.col)
@@ -50,7 +50,7 @@ case class Universe(galaxies: Seq[Galaxy]):
       galaxies match
         case head :: Nil => current
         case head :: tail =>
-          val subDistances = tail.foldLeft(0l):
+          val subDistances = tail.foldLeft(0L):
             case (acc, current) => acc + current.taxiDistanceWith(head) + (emptySpaceBetween(current, head) * expansionFactor)
           distances(tail, current + subDistances)
         case _ => throw Exception("Not supported")
