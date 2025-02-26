@@ -1,21 +1,20 @@
+
+val MULTIPLIER = 17
+val MAX_SIZE = 256
+
 object Solution:
   def run(inputLines: Seq[String]): (String, String) =
 
     val inputRawLenses = inputLines.head.split(",")
 
-    val resultPart1 = inputRawLenses.map(hash).sum
+    val result1 = inputRawLenses.map(hash).sum
 
-    val boxHolder = inputRawLenses.map(Lens.from(_)).foldLeft(BoxHolder(256)):
+    val boxHolder = inputRawLenses.map(Lens.from).foldLeft(BoxHolder(MAX_SIZE)):
       (acc, newLens) => acc.manage(newLens)
 
-    val resultPart2 = boxHolder.focusingPower
+    val result2 = boxHolder.focusingPower
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 class BoxHolder(size: Int):
   private val boxes : Array[Box] = Array.tabulate(size)(Box(_))
@@ -37,7 +36,7 @@ object Lens:
       case _ => throw Exception("Not managed")
 
 case class Box(id: Int, lenses: Seq[Lens] = Seq()):
-  lazy val focusingPower = (id + 1) * lenses.zipWithIndex.map((lens, index) => lens.value.getOrElse(0) * (index + 1)).sum
+  lazy val focusingPower: Int = (id + 1) * lenses.zipWithIndex.map((lens, index) => lens.value.getOrElse(0) * (index + 1)).sum
 
   def manage(newLens: Lens): Box =
     newLens match
@@ -56,4 +55,4 @@ case class Box(id: Int, lenses: Seq[Lens] = Seq()):
 
 def hash(input: String): Int =
   input.foldLeft(0):
-    (acc, newChar) => (acc + newChar.toInt) * 17 % 256
+    (acc, newChar) => (acc + newChar.toInt) * MULTIPLIER % MAX_SIZE
