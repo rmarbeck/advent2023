@@ -6,21 +6,16 @@ object Solution:
 
     val numberOfCycles = 1_000_000_000
 
-    val values = inputLines.map(_.toCharArray).toArray
-    val resultPart1 = values.transpose.map(countMovingUp).sum
+    val columns = inputLines.map(_.toCharArray).toArray.transpose
+    val result1 = columns.map(countMovingUp).sum
 
-    val panel = Panel.fromUnTransposed(values)
+    val panel = Panel.fromColumns(columns)
 
     val (cycle, drift) = findCycleWithHash(countsWithHash(panel))
 
-    val resultPart2 = cycle((numberOfCycles - drift) % cycle.size - 1)
+    val result2 = cycle((numberOfCycles - drift) % cycle.size - 1)
 
-    val result1 = s"$resultPart1"
-    val result2 = s"$resultPart2"
-
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 @tailrec
 def findCycleWithHash(provider: LazyList[(Int, Long)], currentList: List[(Int, Long)] = Nil): (List[Int], Int) =
@@ -70,7 +65,7 @@ private case class Panel(rocks: Array[Array[Char]]):
   override lazy val toString: String = rocks.transpose.map(_.mkString).mkString("\n")
 
 object Panel:
-  def fromUnTransposed(unTransposedRocks: Array[Array[Char]]): Panel = Panel(unTransposedRocks.transpose)
+  def fromColumns(transposedRocks: Array[Array[Char]]): Panel = Panel(transposedRocks)
 
 def reorganize(rocks: Array[Char]): Array[Char] =
   val reorganized = Array.tabulate(rocks.length)(rocks(_))
