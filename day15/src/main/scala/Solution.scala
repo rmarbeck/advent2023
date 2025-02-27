@@ -9,24 +9,23 @@ object Solution:
 
     val result1 = inputRawLenses.map(hash).sum
 
-    val boxHolder = inputRawLenses.map(Lens.from).foldLeft(BoxHolder(MAX_SIZE)):
+    val boxHolder = inputRawLenses.map(Lens.from).foldLeft(BoxHolder.empty(MAX_SIZE)):
       (acc, newLens) => acc.manage(newLens)
 
     val result2 = boxHolder.focusingPower
 
     (s"$result1", s"$result2")
 
-class BoxHolder(size: Int):
-  private val boxes : Array[Box] = Array.tabulate(size)(Box(_))
-
+class BoxHolder private(boxes: Vector[Box]):
   def focusingPower: Int = boxes.map(_.focusingPower).sum
 
-  def manage(newLens: Lens): BoxHolder =
-    boxes(newLens.hashed) = boxes(newLens.hashed).manage(newLens)
-    this
+  def manage(newLens: Lens): BoxHolder = BoxHolder(boxes.updated(newLens.hashed, boxes(newLens.hashed).manage(newLens)))
+
+object BoxHolder:
+  def empty(size: Int): BoxHolder = new BoxHolder(Vector.tabulate(size)(Box(_)))
 
 case class Lens(label: String, value: Option[Int]):
-  def hashed: Int = hash(label)
+  lazy val hashed: Int = hash(label)
 
 object Lens:
   def from(raw: String): Lens =
