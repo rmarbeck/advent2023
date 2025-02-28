@@ -20,9 +20,7 @@ object Solution:
     val result1 = s"${results.head}"
     val result2 = s"${results.max}"
 
-    (s"${result1}", s"${result2}")
-
-end Solution
+    (s"$result1", s"$result2")
 
 def count(beam: Beam)(using playField: PlayField): Int = count(List(beam))
 
@@ -61,7 +59,7 @@ enum Direction:
 export Direction.*
 
 case class EnergetisationStatus(fromNorth: Boolean = false, fromEast: Boolean = false, fromSouth: Boolean = false, fromWest: Boolean = false):
-  lazy val isTrue = fromNorth || fromEast || fromSouth || fromWest
+  lazy val isTrue: Boolean = fromNorth || fromEast || fromSouth || fromWest
   def energetizeFrom(direction: Direction): EnergetisationStatus =
     direction match
       case SouthToNorth => this.copy(fromSouth = true)
@@ -96,12 +94,12 @@ object Beam:
   def apply(row: Int, col: Int, direction: Direction) = new Beam(Position(row, col), direction)
 
 class PlayField(tiles: Array[Array[Tile]]):
-  val (height, width) = (tiles.length, tiles(0).length)
-  val statuses: Array[Array[EnergetisationStatus]] = Array.fill(height, width)(EnergetisationStatus())
+  private val (height, width) = (tiles.length, tiles(0).length)
+  private val statuses: Array[Array[EnergetisationStatus]] = Array.fill(height, width)(EnergetisationStatus())
 
-  def isDefinedAt(position: Position): Boolean = tiles.isDefinedAt(position.row) && tiles(position.row).isDefinedAt(position.col)
-  def getPlace(position: Position): Place = Place(tiles(position.row)(position.col), statuses(position.row)(position.col))
-  def updatePlace(position: Position, newStatus: EnergetisationStatus): Unit = statuses(position.row)(position.col) = newStatus
+  private def isDefinedAt(position: Position): Boolean = tiles.isDefinedAt(position.row) && tiles(position.row).isDefinedAt(position.col)
+  private def getPlace(position: Position): Place = Place(tiles(position.row)(position.col), statuses(position.row)(position.col))
+  private def updatePlace(position: Position, newStatus: EnergetisationStatus): Unit = statuses(position.row)(position.col) = newStatus
   def energize(beam: Beam): List[Beam] =
     beam.next match
       case next if ! isDefinedAt(next) => Nil
